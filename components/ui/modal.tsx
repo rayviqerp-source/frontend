@@ -52,18 +52,18 @@ export function Modal({
   const width =
     size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : size === "xl" ? "max-w-4xl" : "max-w-lg";
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center pb-[70px] sm:items-center sm:pb-0">
       <div className="absolute inset-0 bg-ink/35 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === "string" ? title : undefined}
         className={cn(
-          "relative z-10 flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-surface shadow-pop animate-fade-in sm:rounded-2xl",
+          "relative z-10 flex max-h-[90vh] max-h-[80dvh] w-full flex-col rounded-t-2xl bg-surface shadow-pop animate-fade-in sm:rounded-2xl",
           width,
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
             {description && (
@@ -81,7 +81,7 @@ export function Modal({
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3.5">
             {footer}
           </footer>
         )}
@@ -110,7 +110,7 @@ export function Drawer({
   useEscape(open, onClose);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-[60] flex justify-end">
       <div className="absolute inset-0 bg-ink/35 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         role="dialog"
