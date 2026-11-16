@@ -13,14 +13,17 @@ import {
   Wrench,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useActiveCustomer } from "@/lib/session";
 import { PRODUCT_CATEGORY_LABELS } from "@/lib/constants";
 import { inverterArtFor } from "@/lib/inverter-art";
+import { repairRequestsForCustomer } from "@/lib/selectors";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { InverterBackdrop } from "@/components/ui/inverter-backdrop";
 import { PersonPhoto } from "@/components/ui/person-photo";
+import { RepairStatusBadge } from "@/components/repair/repair-status-badge";
 
 const AVATAR_COLORS = ["#2554e0", "#0e7c66", "#b45309", "#7c3aed", "#be123c", "#0369a1", "#a16207"];
 
@@ -38,7 +41,7 @@ function avatarColor(name: string): string {
 export default function ClientHomePage() {
   const { state } = useStore();
 
-  const customer = state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  const customer = useActiveCustomer();
 
   const engineers = useMemo(
     () =>
@@ -56,6 +59,11 @@ export default function ClientHomePage() {
         .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
     : [];
   const active = tickets.filter((t) => t.status !== "closed" && t.status !== "completed").slice(0, 3);
+
+  const repairRequests = customer ? repairRequestsForCustomer(state, customer.id) : [];
+  const activeRepairs = repairRequests
+    .filter((r) => r.status === "pending" || r.status === "accepted" || r.status === "in_progress")
+    .slice(0, 3);
 
   if (!customer) {
     return (
@@ -102,6 +110,22 @@ export default function ClientHomePage() {
         <ArrowRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />
       </Link>
 
+      {/* Inverter repair service */}
+      <Link
+        href="/client/repair"
+        className="group flex items-center justify-between gap-3 rounded-2xl border border-accent-300/50 bg-accent-100/40 p-4 transition-colors hover:border-accent-400 hover:bg-accent-100/70"
+      >
+        <span className="min-w-0">
+          <span className="block text-[15px] font-semibold text-ink">Inverter repair service</span>
+          <span className="mt-0.5 block text-[12px] text-ink-muted">
+            Send a repair request to a verified company and track it live
+          </span>
+        </span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-500 text-white">
+          <Wrench className="h-4 w-4" aria-hidden />
+        </span>
+      </Link>
+
       {/* Active bookings */}
       {active.length > 0 && (
         <Card padded={false}>
@@ -138,6 +162,45 @@ export default function ClientHomePage() {
                     )}
                     <StatusBadge status={t.status} />
                   </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {/* Active repair requests */}
+      {activeRepairs.length > 0 && (
+        <Card padded={false}>
+          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+            <CardHeader
+              title="Inverter repairs"
+              description="Repair jobs you have sent to a service company."
+              action={
+                <Link href="/client/repairs" className="text-[13px] font-medium text-brand-700 hover:text-brand-800">
+                  All repairs →
+                </Link>
+              }
+            />
+          </div>
+          <ul className="divide-y divide-line border-t border-line">
+            {activeRepairs.map((r) => {
+              const company = state.partners.find((p) => p.id === r.companyId);
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/client/repairs/${r.id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 transition-colors hover:bg-surface-alt sm:px-5"
+                  >
+                    <span className="font-mono text-[12px] font-medium text-ink">{r.ref}</span>
+                    <span className="text-[13px] text-ink-soft">{r.problem.category}</span>
+                    <span className="text-[12px] text-ink-faint">
+                      {company?.name ?? "Repair company"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-2">
+                      <RepairStatusBadge status={r.status} />
+                    </span>
+                  </Link>
                 </li>
               );
             })}

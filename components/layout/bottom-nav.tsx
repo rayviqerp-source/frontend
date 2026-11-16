@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { useStore, unreadCount } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type TabKey = "bookings" | "secondary" | "home" | "notifications" | "profile";
@@ -258,8 +258,6 @@ export function BottomNav() {
       return pathname === "/dashboard" || pathname === "/";
     return pathname === href || pathname.startsWith(href + "/");
   };
-
-  const centerTab = tabs[CENTER_INDEX];
 
   return (
     <>

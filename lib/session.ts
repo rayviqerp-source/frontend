@@ -2,8 +2,28 @@
 
 import { useMemo } from "react";
 import { useStore } from "./store";
-import type { Engineer, Ticket } from "./types";
+import type { Customer, Engineer, Ticket } from "./types";
 import { OPEN_STATUSES } from "./constants";
+
+/**
+ * The customer the client app is currently signed in as.
+ *
+ * The desktop customer portal can keep several preview sessions open at once
+ * (`portalCustomerIds`), so the client app tracks the active customer
+ * separately (`portalCustomerId`). Falling back to the first customer in the
+ * session list keeps the app working for state persisted before the active
+ * customer was tracked.
+ */
+export function useActiveCustomer(): Customer | null {
+  const { state } = useStore();
+
+  return useMemo(() => {
+    if (state.portalCustomerId) {
+      return state.customers.find((c) => c.id === state.portalCustomerId) ?? null;
+    }
+    return state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  }, [state.customers, state.portalCustomerId, state.portalCustomerIds]);
+}
 
 /**
  * Resolve the engineer record for the signed-in user. Falls back to the first

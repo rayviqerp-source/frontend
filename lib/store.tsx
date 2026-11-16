@@ -34,6 +34,8 @@ import type {
   MaintenanceVisit,
   Oem,
   PlatformSettings,
+  RepairRequest,
+  RepairRequestStatus,
   Role,
   ServicePartner,
   ServiceReport,
@@ -58,6 +60,7 @@ import {
   seedOems,
   seedPartners,
   seedPlans,
+  seedRepairRequests,
   seedReports,
   seedSettings,
   seedSites,
@@ -66,12 +69,17 @@ import {
   seedUsers,
   seedVisits,
 } from "./seed";
-import { TICKET_TRANSITIONS } from "./constants";
-import { canTransition, rolesForTransition } from "./permissions";
+import { REPAIR_REQUEST_TRANSITIONS, TICKET_TRANSITIONS } from "./constants";
+import {
+  REPAIR_ADMIN_ROLES,
+  canRepairTransition,
+  canTransition,
+  rolesForTransition,
+} from "./permissions";
 import { addHours, addMinutes, localId, nextTicketRef, todayIso } from "./utils";
 
 const STORAGE_KEY = "rayviq.demo.state";
-const STATE_VERSION = 6;
+const STATE_VERSION = 8;
 
 function buildSeedState(): AppState {
   return {
@@ -86,6 +94,7 @@ function buildSeedState(): AppState {
     sites: seedSites,
     equipment: seedEquipment,
     tickets: seedTickets,
+    repairRequests: seedRepairRequests,
     assignments: seedAssignments,
     visits: seedVisits,
     reports: seedReports,
@@ -99,6 +108,7 @@ function buildSeedState(): AppState {
     integrations: seedIntegrations,
     settings: seedSettings,
     portalCustomerIds: [],
+    portalCustomerId: null,
   };
 }
 
@@ -194,6 +204,23 @@ interface StoreContextValue {
   raiseEscalation: (ticketId: string, reason: string, target: Escalation["target"]) => void;
   resolveEscalation: (escalationId: string, resolution: string) => void;
   closeTicket: (ticketId: string) => void;
+  /* inverter repair service requests */
+  createRepairRequest: (input: NewRepairRequestInput) => RepairRequestResult;
+  respondToRepairRequest: (
+    id: string,
+    decision: "accepted" | "rejected",
+    note?: string,
+  ) => boolean;
+  setRepairRequestStatus: (
+    id: string,
+    to: RepairRequestStatus,
+    note?: string,
+  ) => boolean;
+  setRepairCompanyStatus: (
+    companyId: string,
+    status: ServicePartner["status"],
+    note?: string,
+  ) => boolean;
   /* engineers */
   setEngineerVerification: (engineerId: string, status: Engineer["verification"], note?: string) => void;
   setEngineerStatus: (engineerId: string, status: Engineer["status"], note?: string) => void;
@@ -263,6 +290,100 @@ export interface ServiceReportBody {
   safetyObservations?: string;
   customerAcknowledged: boolean;
   evidenceNames: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Inverter repair service requests                                      */
+/* ------------------------------------------------------------------ */
+
+export interface NewRepairRequestInput {
+  /** Customer raising the request — must own the portal session. */
+  customerId: string;
+  /** Service partner (repair company) the request is sent to. */
+  companyId: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail?: string;
+  address: string;
+  city: string;
+  state?: string;
+  pincode?: string;
+  brand: string;
+  model?: string;
+  capacityKw?: number;
+  category?: string;
+  serialNumber?: string;
+  yearOfInstallation?: string;
+  problemCategory: string;
+  description: string;
+  errorCode?: string;
+  serviceMode?: string;
+  preferredDate?: string;
+  /** File name of the uploaded photo (demo stores the name only). */
+  attachmentName?: string;
+}
+
+export interface RepairRequestResult {
+  ok: boolean;
+  request?: RepairRequest;
+  /** Field-level validation errors, keyed by form field. */
+  errors?: Record<string, string>;
+}
+
+const REPAIR_MIN_DESCRIPTION = 10;
+
+/** Digits-only phone length check — mirrors the client sign-up rule. */
+function phoneDigits(value: string): number {
+  return value.replace(/\D/g, "").length;
+}
+
+/**
+ * Validates a new repair request. Returns a per-field error map so the
+ * form can highlight the exact fields that need attention.
+ */
+export function validateRepairRequest(
+  input: NewRepairRequestInput,
+  company?: ServicePartner,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+
+  if (input.contactName.trim().length < 2) {
+    errors.contactName = "Enter the contact person's full name.";
+  }
+  if (phoneDigits(input.contactPhone) < 10) {
+    errors.contactPhone = "Enter a valid 10-digit contact number.";
+  }
+  if (input.address.trim().length < 5) {
+    errors.address = "Enter the service address (street, area).";
+  }
+  if (!input.city.trim()) {
+    errors.city = "Enter the city.";
+  }
+  if (input.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.contactEmail.trim())) {
+    errors.contactEmail = "Enter a valid email address.";
+  }
+  if (!input.brand.trim()) {
+    errors.brand = "Select the inverter brand.";
+  }
+  if (input.capacityKw !== undefined && (input.capacityKw <= 0 || input.capacityKw > 1000)) {
+    errors.capacityKw = "Capacity must be between 1 and 1000 kW.";
+  }
+  if (!input.problemCategory.trim()) {
+    errors.problemCategory = "Select the problem category.";
+  }
+  if (input.description.trim().length < REPAIR_MIN_DESCRIPTION) {
+    errors.description = `Describe the problem in at least ${REPAIR_MIN_DESCRIPTION} characters.`;
+  }
+  if (company && company.status !== "active") {
+    errors.companyId = "This repair company is not accepting requests right now.";
+  }
+
+  return errors;
+}
+
+/** Next sequential reference for a repair request, e.g. `RPR-2026-0005`. */
+export function nextRepairRef(existing: number): string {
+  return `RPR-${new Date().getFullYear()}-${String(existing).padStart(4, "0")}`;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -1097,6 +1218,276 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [transitionTicket, toast],
   );
 
+  /* ---------------- inverter repair service requests ---------------- */
+
+  const createRepairRequest = useCallback<StoreContextValue["createRepairRequest"]>(
+    (input) => {
+      const company = state.partners.find((p) => p.id === input.companyId);
+      const errors = validateRepairRequest(input, company);
+      if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+      // Authorization: a request can only be raised by a signed-in customer,
+      // and only on behalf of themselves.
+      const activeCustomerId = state.portalCustomerId;
+      const ownsSession = activeCustomerId
+        ? activeCustomerId === input.customerId
+        : state.portalCustomerIds.includes(input.customerId);
+      if (!ownsSession) {
+        return {
+          ok: false,
+          errors: { customerId: "Sign in to raise a repair request." },
+        };
+      }
+      if (!company) {
+        return { ok: false, errors: { companyId: "Select a repair company." } };
+      }
+
+      const holder: { request?: RepairRequest } = {};
+      mutate((d) => {
+        const now = todayIso();
+        const seqNo = d.repairRequests.reduce((max, r) => {
+          const num = Number(r.ref.split("-").pop());
+          return Number.isFinite(num) ? Math.max(max, num) : max;
+        }, 0);
+        const customer = d.customers.find((c) => c.id === input.customerId);
+        const request: RepairRequest = {
+          id: localId("RPR"),
+          ref: nextRepairRef(seqNo + 1),
+          customerId: input.customerId,
+          companyId: input.companyId,
+          createdAt: now,
+          updatedAt: now,
+          status: "pending",
+          contact: {
+            name: input.contactName.trim(),
+            phone: input.contactPhone.trim(),
+            email: input.contactEmail?.trim() || undefined,
+            address: input.address.trim(),
+            city: input.city.trim(),
+            state: input.state?.trim() || customer?.state || "",
+            pincode: input.pincode?.trim() || customer?.pincode || "",
+          },
+          inverter: {
+            brand: input.brand.trim(),
+            model: input.model?.trim() || undefined,
+            capacityKw: input.capacityKw,
+            category: input.category,
+            serialNumber: input.serialNumber?.trim() || undefined,
+            yearOfInstallation: input.yearOfInstallation?.trim() || undefined,
+          },
+          problem: {
+            category: input.problemCategory.trim(),
+            description: input.description.trim(),
+            errorCode: input.errorCode?.trim() || undefined,
+          },
+          serviceMode: input.serviceMode,
+          preferredDate: input.preferredDate,
+          attachment: input.attachmentName
+            ? {
+                id: localId("ATT"),
+                name: input.attachmentName,
+                kind: "image",
+                sizeKb: 420 + (input.attachmentName.length % 900),
+                uploadedAt: now,
+              }
+            : undefined,
+          timeline: [
+            {
+              id: localId("TL"),
+              at: now,
+              actor: customer?.name ?? input.contactName.trim(),
+              actorRole: "customer",
+              type: "created",
+              title: "Repair request raised",
+              detail: `${input.brand.trim()} inverter — ${input.problemCategory.trim()}`,
+              toStatus: "pending",
+            },
+          ],
+          createdBy: input.customerId,
+        };
+        d.repairRequests.unshift(request);
+        holder.request = request;
+        audit(
+          d,
+          "Repair request created",
+          request.ref,
+          `${company.name} · ${request.inverter.brand} · ${request.problem.category}`,
+          "info",
+          request.id,
+        );
+        notify(d, {
+          title: "New inverter repair request",
+          body: `${request.ref} — ${request.problem.category} for ${request.inverter.brand} ${request.inverter.model ?? ""} in ${request.contact.city}.`,
+          type: "repair_request_created",
+          audience: ["partner_manager", "super_admin", "ops_manager"],
+          ticketRef: request.ref,
+        });
+      });
+
+      if (!holder.request) return { ok: false, errors: { description: "Could not create the request." } };
+      return { ok: true, request: holder.request };
+    },
+    [mutate, state.partners, state.portalCustomerId, state.portalCustomerIds],
+  );
+
+  const respondToRepairRequest = useCallback<StoreContextValue["respondToRepairRequest"]>(
+    (id, decision, note) => {
+      let ok = false;
+      mutate((d) => {
+        const request = d.repairRequests.find((r) => r.id === id);
+        if (!request) return;
+        const role = actorRole(d);
+        const user = d.users.find((u) => u.id === d.currentUserId);
+        // Authorization: only the repair company that owns the request (or a
+        // platform admin) may respond to it.
+        const permitted =
+          (role !== "system" && REPAIR_ADMIN_ROLES.includes(role)) ||
+          (role === "partner_manager" && user?.partnerId === request.companyId);
+        if (!permitted) return;
+
+        const to: RepairRequestStatus = decision === "accepted" ? "accepted" : "rejected";
+        const allowed = REPAIR_REQUEST_TRANSITIONS[request.status] ?? [];
+        if (!allowed.includes(to)) return;
+        if (to === "rejected" && !note?.trim()) return;
+
+        const now = todayIso();
+        const company = d.partners.find((p) => p.id === request.companyId);
+        request.status = to;
+        request.updatedAt = now;
+        if (to === "accepted") request.companyNote = note?.trim() || undefined;
+        if (to === "rejected") request.rejectionReason = note?.trim();
+        request.timeline.push({
+          id: localId("TL"),
+          at: now,
+          actor: actorName(d),
+          actorRole: role,
+          type: "status",
+          title:
+            to === "accepted"
+              ? `Request accepted by ${company?.name ?? "the repair company"}`
+              : `Request declined by ${company?.name ?? "the repair company"}`,
+          detail: note?.trim() || undefined,
+          fromStatus: "pending",
+          toStatus: to,
+        });
+        audit(
+          d,
+          to === "accepted" ? "Repair request accepted" : "Repair request rejected",
+          request.ref,
+          note?.trim() || company?.name,
+          to === "accepted" ? "info" : "warning",
+          request.id,
+        );
+        notify(d, {
+          title: to === "accepted" ? "Repair request accepted" : "Repair request declined",
+          body: `${request.ref} — ${company?.name ?? "Repair company"} ${to} the request.`,
+          type: to === "accepted" ? "repair_request_accepted" : "repair_request_rejected",
+          audience: ["super_admin", "ops_manager", "support_executive"],
+          ticketRef: request.ref,
+        });
+        ok = true;
+      });
+      return ok;
+    },
+    [mutate],
+  );
+
+  const setRepairRequestStatus = useCallback<StoreContextValue["setRepairRequestStatus"]>(
+    (id, to, note) => {
+      let ok = false;
+      mutate((d) => {
+        const request = d.repairRequests.find((r) => r.id === id);
+        if (!request) return;
+        const role = actorRole(d);
+        const user = d.users.find((u) => u.id === d.currentUserId);
+        const isAdmin = role !== "system" && REPAIR_ADMIN_ROLES.includes(role);
+        const permitted =
+          isAdmin || (role === "partner_manager" && user?.partnerId === request.companyId);
+        if (!permitted) return;
+
+        const allowed = REPAIR_REQUEST_TRANSITIONS[request.status] ?? [];
+        if (!allowed.includes(to)) return;
+        if (!isAdmin && !canRepairTransition(role, request.status, to)) return;
+
+        const now = todayIso();
+        const from = request.status;
+        request.status = to;
+        request.updatedAt = now;
+        if (to === "completed") request.completedAt = now;
+        request.timeline.push({
+          id: localId("TL"),
+          at: now,
+          actor: actorName(d),
+          actorRole: role,
+          type: to === "completed" ? "closure" : "status",
+          title:
+            to === "completed"
+              ? "Repair completed"
+              : `Status changed to ${to.replace(/_/g, " ")}`,
+          detail: note?.trim() || undefined,
+          fromStatus: from,
+          toStatus: to,
+        });
+        audit(
+          d,
+          "Repair status changed",
+          request.ref,
+          `${from} → ${to}${note ? ` — ${note}` : ""}`,
+          to === "completed" ? "info" : "info",
+          request.id,
+        );
+        notify(d, {
+          title: "Repair request updated",
+          body: `${request.ref} — now ${to.replace(/_/g, " ")}.`,
+          type: "repair_request_updated",
+          audience: ["super_admin", "ops_manager", "support_executive"],
+          ticketRef: request.ref,
+        });
+        ok = true;
+      });
+      return ok;
+    },
+    [mutate],
+  );
+
+  const setRepairCompanyStatus = useCallback<StoreContextValue["setRepairCompanyStatus"]>(
+    (companyId, status, note) => {
+      let applied = false;
+      mutate((d) => {
+        const partner = d.partners.find((p) => p.id === companyId);
+        if (!partner) return;
+        const role = actorRole(d);
+        if (role === "system" || !REPAIR_ADMIN_ROLES.includes(role)) return;
+        partner.status = status;
+        audit(
+          d,
+          `Repair company ${status}`,
+          partner.name,
+          note,
+          status === "inactive" ? "warning" : "info",
+          partner.id,
+        );
+        notify(d, {
+          title: `Repair company ${status}`,
+          body: `${partner.name} — ${note ?? "directory status updated by the platform team."}`,
+          type: "system",
+          audience: ["super_admin", "ops_manager"],
+        });
+        applied = true;
+      });
+      if (applied) {
+        toast("Repair company updated", { tone: "info" });
+      } else {
+        toast("Not allowed", {
+          description: "Only a platform admin can manage the repair directory.",
+          tone: "error",
+        });
+      }
+      return applied;
+    },
+    [mutate, toast],
+  );
+
   /* ---------------- engineers ---------------- */
 
   const setEngineerVerification = useCallback<StoreContextValue["setEngineerVerification"]>(
@@ -1344,12 +1735,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const portalLogin = useCallback((customerId: string) => {
     mutate((d) => {
       if (!d.portalCustomerIds.includes(customerId)) d.portalCustomerIds.push(customerId);
+      /* The client app acts as one customer at a time — remember which. */
+      d.portalCustomerId = customerId;
     });
   }, [mutate]);
 
   const portalLogout = useCallback(() => {
     mutate((d) => {
       d.portalCustomerIds = [];
+      d.portalCustomerId = null;
     });
   }, [mutate]);
 
@@ -1375,6 +1769,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
         d.customers.push(customer);
         if (!d.portalCustomerIds.includes(customer.id)) d.portalCustomerIds.push(customer.id);
+        d.portalCustomerId = customer.id;
         audit(
           d,
           "Customer account created",
@@ -1424,6 +1819,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     raiseEscalation,
     resolveEscalation,
     closeTicket,
+    createRepairRequest,
+    respondToRepairRequest,
+    setRepairRequestStatus,
+    setRepairCompanyStatus,
     setEngineerVerification,
     setEngineerStatus,
     updateEngineer,
@@ -1476,6 +1875,7 @@ export type {
   Integration,
   MaintenanceVisit,
   Oem,
+  RepairRequest,
   ServicePartner,
   ServiceReport,
   Site,

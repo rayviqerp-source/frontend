@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/brand/logo";
 import { useStore } from "@/lib/store";
+import { useActiveCustomer } from "@/lib/session";
 import { cn, initials } from "@/lib/utils";
 
 /* Desktop header links — mobile uses the bottom tab bar instead. */
 const CLIENT_LINKS = [
   { href: "/client", label: "Home" },
   { href: "/client/bookings", label: "Bookings" },
+  { href: "/client/repairs", label: "Repairs" },
   { href: "/marketplace", label: "Experts" },
 ];
 
@@ -25,7 +27,7 @@ const CLIENT_LINKS = [
  * already covers Home / Bookings / My Profile there.
  */
 export function ClientHeader() {
-  const { state, ready } = useStore();
+  const { ready } = useStore();
   const pathname = usePathname();
 
   /*
@@ -39,7 +41,7 @@ export function ClientHeader() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount flag, same pattern as the store's localStorage hydration
   useEffect(() => setMounted(true), []);
 
-  const customer = state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  const customer = useActiveCustomer();
   const signedIn = ready && customer !== null;
 
   return (

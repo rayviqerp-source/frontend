@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { useActiveCustomer } from "@/lib/session";
 import { initials } from "@/lib/utils";
 
 /**
@@ -12,8 +13,8 @@ import { initials } from "@/lib/utils";
  *  - guest → "Sign in" + "Open app"
  */
 export function MarketplaceAuth() {
-  const { state, currentUser, ready } = useStore();
-  const customer = state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  const { currentUser, ready } = useStore();
+  const customer = useActiveCustomer();
 
   return (
     <nav className="flex items-center gap-1.5 sm:gap-3" aria-label="Marketplace">

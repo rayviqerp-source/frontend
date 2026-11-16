@@ -27,6 +27,9 @@ export type Permission =
   | "eng.reports.submit"
   | "eng.profile.manage"
   | "eng.onboarding.submit"
+  /* Inverter repair requests (service partner / repair company) */
+  | "repair.requests.view"
+  | "repair.requests.manage"
   /* Platform admin */
   | "admin.dashboard"
   | "admin.oems.manage"
@@ -39,6 +42,8 @@ export type Permission =
   | "admin.integrations.manage"
   | "admin.settings.manage"
   | "admin.audit.view"
+  | "admin.repair.view"
+  | "admin.repair.companies"
   /* Shared */
   | "shared.notifications"
   | "shared.search"
@@ -98,6 +103,7 @@ const MATRIX: Record<Role, Permission[]> = {
     "eng.reports.submit",
     "eng.profile.manage",
     "eng.onboarding.submit",
+    "repair.requests.view",
   ],
   partner_manager: [
     ...ALL,
@@ -108,6 +114,8 @@ const MATRIX: Record<Role, Permission[]> = {
     "eng.reports.submit",
     "eng.profile.manage",
     "eng.onboarding.submit",
+    "repair.requests.view",
+    "repair.requests.manage",
   ],
   super_admin: [
     ...ALL,
@@ -122,6 +130,8 @@ const MATRIX: Record<Role, Permission[]> = {
     "admin.integrations.manage",
     "admin.settings.manage",
     "admin.audit.view",
+    "admin.repair.view",
+    "admin.repair.companies",
     "oem.customers.view",
     "oem.products.view",
   ],
@@ -134,12 +144,14 @@ const MATRIX: Record<Role, Permission[]> = {
     "admin.amc.manage",
     "admin.network.view",
     "admin.audit.view",
+    "admin.repair.view",
   ],
   support_executive: [
     ...ALL,
     "admin.dashboard",
     "admin.tickets.view",
     "admin.audit.view",
+    "admin.repair.view",
   ],
 };
 
@@ -195,6 +207,33 @@ export function canTransition(role: Role | "system", from: string, to: string): 
   if (from === to) return false;
   return rolesForTransition(from, to).includes(role);
 }
+
+/**
+ * Roles allowed to drive an inverter repair request from `from` to `to`.
+ *
+ * Only the repair company (`partner_manager`) decides on its own work; the
+ * request owner never self-serves a status change. Platform admins may
+ * intervene (handled explicitly by the store, like `system` on tickets).
+ */
+export function rolesForRepairTransition(from: string, to: string): (Role | "system")[] {
+  const table: Record<string, (Role | "system")[]> = {
+    "pending>accepted": ["partner_manager"],
+    "pending>rejected": ["partner_manager"],
+    "accepted>in_progress": ["partner_manager"],
+    "accepted>rejected": ["partner_manager"],
+    "in_progress>completed": ["partner_manager"],
+  };
+  const key = `${from}>${to}`;
+  return table[key] ?? [];
+}
+
+export function canRepairTransition(role: Role | "system", from: string, to: string): boolean {
+  if (from === to) return false;
+  return rolesForRepairTransition(from, to).includes(role);
+}
+
+/** Platform roles allowed to oversee and intervene on repair requests. */
+export const REPAIR_ADMIN_ROLES: Role[] = ["super_admin", "ops_manager"];
 
 /** Decisions that stay with the OEM unless explicitly delegated. */
 export const OEM_CONTROLLED_DECISIONS = [

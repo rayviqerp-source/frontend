@@ -42,6 +42,11 @@ export default function CustomerPortalPage() {
                   <Wrench className="h-4 w-4" /> Book an engineer
                 </Button>
               </Link>
+              <Link href="/client/repair">
+                <Button variant="outline">
+                  <Wrench className="h-4 w-4" /> Inverter repair
+                </Button>
+              </Link>
               <Button variant="outline" onClick={() => { portalLogout(); toast("Portal session ended", { tone: "info" }); }}>
                 <LogOut className="h-4 w-4" /> End portal session
               </Button>

@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useActiveCustomer } from "@/lib/session";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -41,7 +42,7 @@ export default function ClientProfilePage() {
     pincode: "",
   });
 
-  const customer = state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  const customer = useActiveCustomer();
 
   if (!customer) {
     return (

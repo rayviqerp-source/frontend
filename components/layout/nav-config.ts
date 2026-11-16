@@ -86,6 +86,7 @@ export const VENDOR_NAV: NavSection[] = [
       { href: "/vendor/engineers", label: "My Engineers", icon: Users, permission: "eng.onboarding.submit", match: ["/vendor/engineers"] },
       { href: "/vendor/onboarding", label: "Onboard Engineer", icon: UserPlus, permission: "eng.onboarding.submit" },
       { href: "/vendor/assignments", label: "Assignment Workflow", icon: ListChecks, permission: "eng.requests.view", match: ["/vendor/assignments"] },
+      { href: "/vendor/repair-requests", label: "Repair Requests", icon: Wrench, permission: "repair.requests.view", match: ["/vendor/repair-requests"] },
     ],
   },
 ];
@@ -97,6 +98,7 @@ export const ADMIN_NAV: NavSection[] = [
       { href: "/admin/oems", label: "OEM Organisations", icon: Building2, permission: "admin.oems.manage" },
       { href: "/admin/engineers", label: "Engineer Verification", icon: ShieldCheck, permission: "admin.engineers.verify", match: ["/admin/engineers"] },
       { href: "/admin/tickets", label: "Platform Tickets", icon: Ticket, permission: "admin.tickets.view" },
+      { href: "/admin/repair-requests", label: "Repair Requests", icon: Wrench, permission: "admin.repair.view", match: ["/admin/repair-requests"] },
       { href: "/admin/operations", label: "Assignment Operations", icon: Activity, permission: "admin.operations.intervene" },
       { href: "/admin/amc", label: "AMC Operations", icon: ClipboardList, permission: "admin.amc.manage" },
       { href: "/admin/network", label: "Service Network", icon: Network, permission: "admin.network.view" },

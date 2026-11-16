@@ -1,5 +1,6 @@
 import type {
   NotificationChannel,
+  RepairRequestStatus,
   Role,
   TicketPriority,
   TicketStatus,
@@ -188,6 +189,98 @@ export const ISSUE_GROUP_LABELS: Record<string, string> = {
   installation: "Installation",
   other: "Other",
 };
+
+/* ------------------------------------------------------------------ */
+/* Inverter repair service requests                                     */
+/* ------------------------------------------------------------------ */
+
+export const REPAIR_STATUS_LABELS: Record<RepairRequestStatus, string> = {
+  pending: "Pending",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  in_progress: "In Progress",
+  completed: "Completed",
+};
+
+export const REPAIR_STATUS_TONES: Record<
+  RepairRequestStatus,
+  "gray" | "blue" | "cyan" | "amber" | "violet" | "green" | "red" | "indigo"
+> = {
+  pending: "amber",
+  accepted: "blue",
+  rejected: "red",
+  in_progress: "violet",
+  completed: "green",
+};
+
+/**
+ * Repair request status machine — the same shape as `TICKET_TRANSITIONS`.
+ * A request may only move to one of its defined next states; the repair
+ * company is the only actor allowed to drive it (admin may intervene).
+ */
+export const REPAIR_REQUEST_TRANSITIONS: Record<RepairRequestStatus, RepairRequestStatus[]> = {
+  pending: ["accepted", "rejected"],
+  accepted: ["in_progress", "rejected"],
+  in_progress: ["completed"],
+  rejected: [],
+  completed: [],
+};
+
+/** Statuses where the repair request is still being worked on. */
+export const REPAIR_OPEN_STATUSES: RepairRequestStatus[] = [
+  "pending",
+  "accepted",
+  "in_progress",
+];
+
+/** Ordered pipeline used by the customer-facing status tracker. */
+export const REPAIR_PIPELINE: RepairRequestStatus[] = [
+  "pending",
+  "accepted",
+  "in_progress",
+  "completed",
+];
+
+export const REPAIR_SERVICE_MODES = [
+  { value: "on_site", label: "On-site visit" },
+  { value: "workshop", label: "Pick-up & workshop repair" },
+  { value: "remote", label: "Remote diagnosis (no visit)" },
+] as const;
+
+export const REPAIR_SERVICE_MODE_LABELS: Record<string, string> = {
+  on_site: "On-site visit",
+  workshop: "Pick-up & workshop repair",
+  remote: "Remote diagnosis (no visit)",
+};
+
+/** Problem categories a customer can pick when raising a repair request. */
+export const REPAIR_PROBLEM_CATEGORIES = [
+  "No output / zero generation",
+  "Inverter tripping frequently",
+  "Error code displayed",
+  "Grid mismatch / low voltage",
+  "Communication / Wi-Fi failure",
+  "Fan or cooling fault",
+  "Display / HMI malfunction",
+  "DC string fuse failure",
+  "AC isolator or MCB issue",
+  "Physical damage or corrosion",
+  "Water ingress",
+  "Preventive maintenance request",
+  "Other",
+];
+
+export const INVERTER_BRANDS = [
+  "Voltrix",
+  "Helios",
+  "SunArc",
+  "Luminous",
+  "Tata Power",
+  "SolarEdge",
+  "Fronius",
+  "SMA",
+  "Others",
+];
 
 /* ------------------------------------------------------------------ */
 /* Misc labels                                                         */

@@ -85,6 +85,17 @@ export interface ServicePartner {
   status: "active" | "inactive";
   rating: number;
   since: string;
+  /**
+   * Inverter-repair directory attributes. Service partners are the companies
+   * that take on repair work, so these power the customer-facing repair
+   * service picker. Optional — partners without a repair offering stay
+   * invisible in the repair module.
+   */
+  repairSpecialities?: string[];
+  brandsServiced?: string[];
+  serviceModes?: string[];
+  avgTurnaround?: string;
+  jobsCompleted?: number;
 }
 
 export interface Engineer {
@@ -374,6 +385,97 @@ export interface Ticket {
 }
 
 /* ------------------------------------------------------------------ */
+/* Inverter repair service requests                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lifecycle of an inverter repair request.
+ *
+ * - `pending`     — raised by the customer, waiting on the repair company.
+ * - `accepted`    — the repair company took the job on.
+ * - `rejected`    — the repair company declined (terminal).
+ * - `in_progress` — repair work is under way.
+ * - `completed`   — repair finished and closed (terminal).
+ */
+export type RepairRequestStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "in_progress"
+  | "completed";
+
+export interface RepairTimelineEvent {
+  id: string;
+  at: string;
+  actor: string;
+  actorRole: string;
+  type: "created" | "status" | "note" | "closure";
+  title: string;
+  detail?: string;
+  fromStatus?: RepairRequestStatus;
+  toStatus?: RepairRequestStatus;
+}
+
+export interface RepairAttachment {
+  id: string;
+  name: string;
+  kind: "image" | "document";
+  sizeKb: number;
+  /** Remote URL once the file is stored (Cloudinary in the live API). */
+  url?: string;
+  uploadedAt: string;
+}
+
+export interface RepairInverterDetails {
+  brand: string;
+  model?: string;
+  capacityKw?: number;
+  /** Product category key — see `PRODUCT_CATEGORY_LABELS`. */
+  category?: string;
+  serialNumber?: string;
+  yearOfInstallation?: string;
+}
+
+export interface RepairRequest {
+  id: string;
+  /** Human reference, e.g. `RPR-2026-0007`. */
+  ref: string;
+  /** Customer who raised the request. */
+  customerId: string;
+  /** Service partner (repair company) the request was sent to. */
+  companyId: string;
+  createdAt: string;
+  updatedAt: string;
+  status: RepairRequestStatus;
+  contact: {
+    name: string;
+    phone: string;
+    email?: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
+  inverter: RepairInverterDetails;
+  problem: {
+    category: string;
+    description: string;
+    errorCode?: string;
+  };
+  /** `on_site` | `workshop` | `remote`. */
+  serviceMode?: string;
+  preferredDate?: string;
+  attachment?: RepairAttachment;
+  timeline: RepairTimelineEvent[];
+  /** Note left by the repair company when accepting the work. */
+  companyNote?: string;
+  /** Reason given when the request was declined. */
+  rejectionReason?: string;
+  completedAt?: string;
+  createdBy: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* AMC                                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -451,6 +553,10 @@ export interface AppNotification {
     | "amc_renewal"
     | "sla_breach"
     | "engineer_verification"
+    | "repair_request_created"
+    | "repair_request_accepted"
+    | "repair_request_rejected"
+    | "repair_request_updated"
     | "system";
   audience: Role[];
   oemId?: string;
@@ -613,6 +719,8 @@ export interface AppState {
   sites: Site[];
   equipment: Equipment[];
   tickets: Ticket[];
+  /** Inverter repair service requests raised by customers. */
+  repairRequests: RepairRequest[];
   assignments: Assignment[];
   visits: Visit[];
   reports: ServiceReport[];
@@ -627,4 +735,14 @@ export interface AppState {
   settings: PlatformSettings;
   /** Session flag for the future-ready customer portal demo. */
   portalCustomerIds: string[];
+  /**
+   * The customer currently signed in to the client app.
+   *
+   * `portalCustomerIds` holds every customer with an open portal session (the
+   * desktop portal preview supports several at once), while this points at
+   * the one the client app is acting as. Without it the client app would
+   * fall back to the first customer in the list and could show another
+   * customer's data.
+   */
+  portalCustomerId: string | null;
 }

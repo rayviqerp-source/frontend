@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/client", label: "Home", icon: "home" },
   { href: "/client/bookings", label: "Bookings", icon: "bookings" },
+  { href: "/client/repairs", label: "Repairs", icon: "repairs" },
   { href: "/marketplace", label: "Experts", icon: "experts" },
   { href: "/client/profile", label: "My Profile", icon: "profile" },
 ] as const;
@@ -24,6 +25,13 @@ function TabIcon({ name }: { name: (typeof TABS)[number]["icon"] }) {
     return (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={cls}>
         <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    );
+  }
+  if (name === "repairs") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={cls}>
+        <path d="M14.7 6.3a4 4 0 10-3.9 4.9L4 17.9V20h2.1l6.8-6.8a4 4 0 004.9-3.9l-2.6 2.6-2.5-.5-.5-2.5 2.5-2.6z" />
       </svg>
     );
   }

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Stray scratch note kept in the repo root (not part of the app).
+    "date.js",
   ]),
 ]);
 

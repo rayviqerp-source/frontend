@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useActiveCustomer } from "@/lib/session";
 import { TICKET_STATUS_TONES } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ const SHORT_STATUS: Record<string, string> = {
 export default function ClientBookingsPage() {
   const { state } = useStore();
 
-  const customer = state.customers.find((c) => state.portalCustomerIds.includes(c.id)) ?? null;
+  const customer = useActiveCustomer();
 
   if (!customer) {
     return (

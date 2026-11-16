@@ -1,12 +1,14 @@
 import type {
   AppState,
   Engineer,
+  RepairRequest,
   Role,
+  ServicePartner,
   Ticket,
   TicketPriority,
   TicketStatus,
 } from "./types";
-import { OPEN_STATUSES, TICKET_STATUS_LABELS } from "./constants";
+import { OPEN_STATUSES, REPAIR_OPEN_STATUSES, TICKET_STATUS_LABELS } from "./constants";
 import { daysBetween } from "./utils";
 
 /* ---------------- ticket scoping by role ---------------- */
@@ -255,6 +257,68 @@ export function recommendEngineers(state: AppState, ticket: Ticket, limit = 5): 
 }
 
 /* ---------------- misc ---------------- */
+
+/* ---------------- inverter repair service requests ---------------- */
+
+/**
+ * Repair requests raised by one customer. The customer portal session is the
+ * only thing that grants access to a customer's own requests.
+ */
+export function repairRequestsForCustomer(state: AppState, customerId: string): RepairRequest[] {
+  return state.repairRequests
+    .filter((r) => r.customerId === customerId)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+}
+
+/** Repair requests assigned to one repair company (service partner). */
+export function repairRequestsForCompany(state: AppState, companyId: string): RepairRequest[] {
+  return state.repairRequests
+    .filter((r) => r.companyId === companyId)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+}
+
+export interface RepairRequestKpis {
+  total: number;
+  pending: number;
+  active: number;
+  completed: number;
+  rejected: number;
+  avgAcceptanceHours: number;
+}
+
+/** KPI buckets for the repair module (company inbox and admin oversight). */
+export function repairRequestKpis(requests: RepairRequest[]): RepairRequestKpis {
+  const done = requests.filter((r) => r.status === "completed");
+  const acceptanceSamples = requests
+    .filter((r) => r.status !== "pending" && r.status !== "rejected")
+    .map((r) => {
+      const responded = r.timeline.find((e) => e.type === "status");
+      return responded
+        ? (new Date(responded.at).getTime() - new Date(r.createdAt).getTime()) / 3_600_000
+        : null;
+    })
+    .filter((v): v is number => v !== null && v >= 0);
+
+  return {
+    total: requests.length,
+    pending: requests.filter((r) => r.status === "pending").length,
+    active: requests.filter((r) => REPAIR_OPEN_STATUSES.includes(r.status)).length,
+    completed: done.length,
+    rejected: requests.filter((r) => r.status === "rejected").length,
+    avgAcceptanceHours: acceptanceSamples.length
+      ? Math.round(
+          (acceptanceSamples.reduce((a, b) => a + b, 0) / acceptanceSamples.length) * 10,
+        ) / 10
+      : 0,
+  };
+}
+
+/** Repair companies that are open for new work (directory listing). */
+export function activeRepairCompanies(state: AppState): ServicePartner[] {
+  return state.partners.filter(
+    (p) => p.status === "active" && (p.repairSpecialities?.length ?? 0) > 0,
+  );
+}
 
 export function slaHealth(tickets: Ticket[]): { label: string; count: number; tone: "green" | "amber" | "red" }[] {
   const open = tickets.filter((t) => OPEN_STATUSES.includes(t.status));
