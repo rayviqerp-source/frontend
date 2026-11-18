@@ -63,7 +63,7 @@ export default function VendorDashboardPage() {
           <EmptyState
             icon={<Building2 className="h-5 w-5" />}
             title="No service partner linked"
-            description="Sign in as Neha (USR-05 · BrightField) to preview the vendor workspace."
+            description="Sign in as Neha (USR-05 · Sunce) to preview the vendor workspace."
           />
         </Card>
       </div>

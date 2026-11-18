@@ -93,7 +93,7 @@ export default function VendorOnboardingPage() {
           <EmptyState
             icon={<Users className="h-5 w-5" />}
             title="No service partner linked"
-            description="Sign in as Neha (USR-05 · BrightField) to onboard engineers for your team."
+            description="Sign in as Neha (USR-05 · Sunce) to onboard engineers for your team."
           />
         </Card>
       </div>

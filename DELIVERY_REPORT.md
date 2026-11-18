@@ -91,7 +91,7 @@ BUSINESS CONTEXT
 
   Seed data (lib/seed.ts): 12K+ consistent records, fixed timestamps
     • 8 demo users (one per role): priya@voltrix, rohan@voltrix, ananya@voltrix,
-      vikram@brightfield, neha@brightfield, arjun@rayviq, kavita@rayviq,
+      vikram@sunce, neha@sunce, arjun@rayviq, kavita@rayviq,
       sameer@rayviq
     • 3 OEMs: Voltrix, Helios, SunArc
     • 3 partners, 10 engineers (states: active/suspended/pending/more_info),
@@ -181,8 +181,8 @@ BUSINESS CONTEXT
   USR-01      | priya@voltrix.example                   | oem_admin          | OEM
   USR-02      | rohan@voltrix.example                   | oem_service_manager| OEM
   USR-03      | ananya@voltrix.example                  | oem_service_executive| OEM
-  USR-04      | vikram@brightfield.example              | engineer           | Engineer
-  USR-05      | neha@brightfield.example                | partner_manager    | Engineer
+  USR-04      | vikram@sunce.example              | engineer           | Engineer
+  USR-05      | neha@sunce.example                | partner_manager    | Engineer
   USR-06      | arjun@rayviq.example                    | super_admin        | Admin
   USR-07      | kavita@rayviq.example                   | ops_manager        | Admin
   USR-08      | sameer@rayviq.example                   | support_executive  | Admin

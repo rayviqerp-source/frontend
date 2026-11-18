@@ -67,12 +67,18 @@ export default function ClientLoginPage() {
     setError("");
   };
 
+  /** Return visitors to the page they came from (only internal client paths). */
+  const afterAuthPath = () => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next?.startsWith("/client") ? next : "/client";
+  };
+
   const signIn = (id: string, displayName: string) => {
     portalLogin(id);
     toast(`Welcome, ${displayName.split(" ")[0]}`, {
       description: "Signed in to your RAYVIQ account.",
     });
-    router.push("/client");
+    router.push(afterAuthPath());
   };
 
   const submitSignIn = (e: React.FormEvent) => {
@@ -142,7 +148,7 @@ export default function ClientLoginPage() {
       toast(`Welcome, ${cleanName.split(" ")[0]}`, {
         description: "Your RAYVIQ account is ready.",
       });
-      router.push("/client");
+      router.push(afterAuthPath());
     }, 450);
   };
 

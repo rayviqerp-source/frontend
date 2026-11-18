@@ -86,7 +86,7 @@ export default function VendorRepairRequestsPage() {
           <EmptyState
             icon={<Wrench className="h-5 w-5" />}
             title="No service partner linked"
-            description="Sign in as Neha (USR-05 · BrightField) to preview the repair workspace."
+            description="Sign in as Neha (USR-05 · Sunce) to preview the repair workspace."
           />
         </Card>
       </div>

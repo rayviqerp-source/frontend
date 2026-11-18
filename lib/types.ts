@@ -96,7 +96,9 @@ export interface ServicePartner {
   serviceModes?: string[];
   avgTurnaround?: string;
   jobsCompleted?: number;
-  /** Company logo (data URL or hosted URL). Absent → branded initials placeholder. */
+  /** Bundled logo image shown on the public repair vendor card. */
+  image?: string;
+  /** Company logo (data URL or hosted URL). Absent → neutral placeholder. */
   logoUrl?: string;
 }
 

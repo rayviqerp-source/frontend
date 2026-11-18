@@ -1,25 +1,16 @@
 "use client";
 
-import { Check, Clock3, MapPin, Star, Wrench } from "lucide-react";
-import { InverterBackdrop } from "@/components/ui/inverter-backdrop";
+import Image from "next/image";
+import { Building2, Check, Clock3, MapPin, Star, Wrench } from "lucide-react";
 import { REPAIR_SERVICE_MODE_LABELS } from "@/lib/constants";
-import { inverterArtForPartner } from "@/lib/inverter-art";
 import type { ServicePartner } from "@/lib/types";
-import { cn, initials } from "@/lib/utils";
-
-const COMPANY_COLORS = ["#2554e0", "#0e7c66", "#b45309", "#7c3aed", "#be123c", "#0369a1"];
-
-function companyColor(name: string): string {
-  let h = 0;
-  for (const ch of name) h = (h + ch.charCodeAt(0)) % COMPANY_COLORS.length;
-  return COMPANY_COLORS[h];
-}
+import { cn } from "@/lib/utils";
 
 /**
- * Repair vendor card — mirrors the Marketplace engineer card: a coloured
- * banner with inverter artwork, the company logo (or a branded initials
- * placeholder), a clear VENDOR pill, and a compact details footer.
- * Used by the public repair directory and by the request form's picker.
+ * Repair vendor card — the public directory card. Shows the company's real
+ * logo on a white background (never cropped), with the VENDOR and turnaround
+ * badges overlaid on the image area. The details footer stays compact and
+ * matches the Marketplace engineer cards.
  */
 export function RepairCompanyCard({
   partner,
@@ -33,6 +24,7 @@ export function RepairCompanyCard({
   const modes = (partner.serviceModes ?? [])
     .map((m) => REPAIR_SERVICE_MODE_LABELS[m] ?? m)
     .join(" · ");
+  const logo = partner.image ?? partner.logoUrl;
 
   return (
     <button
@@ -46,30 +38,22 @@ export function RepairCompanyCard({
           : "border-line hover:border-brand-300",
       )}
     >
-      {/* photo / logo banner */}
-      <div
-        className="relative h-28 shrink-0 overflow-hidden"
-        style={{ backgroundColor: companyColor(partner.name) }}
-      >
-        <InverterBackdrop src={inverterArtForPartner(partner.repairSpecialities)} />
-        <span
-          className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/25"
-          aria-hidden
-        />
-        <span
-          className={cn(
-            "absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white ring-2 ring-white/80 shadow-pop transition-transform duration-200 group-hover:scale-105 sm:h-20 sm:w-20 sm:text-xl",
-            !partner.logoUrl && "bg-gradient-to-br from-white/20 to-black/20",
-          )}
-          style={partner.logoUrl ? { backgroundColor: "#ffffff" } : undefined}
-        >
-          {partner.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- vendor logo from a data URL or hosted URL
-            <img src={partner.logoUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            initials(partner.name)
-          )}
-        </span>
+      {/* logo area */}
+      <div className="relative h-28 shrink-0 overflow-hidden border-b border-line bg-white">
+        {logo ? (
+          <Image
+            src={logo}
+            alt={`${partner.name} logo`}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-contain p-5"
+            unoptimized={logo.startsWith("data:")}
+          />
+        ) : (
+          <span className="flex h-full items-center justify-center text-ink-faint" aria-hidden>
+            <Building2 className="h-10 w-10" />
+          </span>
+        )}
         <span className="absolute left-2.5 top-2.5 rounded-md bg-white/95 px-2 py-1 text-[9.5px] font-bold uppercase tracking-widest text-ink shadow-card sm:left-3 sm:top-3">
           Repair vendor
         </span>
@@ -78,7 +62,7 @@ export function RepairCompanyCard({
             <Check className="h-4 w-4" aria-hidden />
           </span>
         )}
-        <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/40 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur sm:bottom-3 sm:left-3">
+        <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur sm:bottom-3 sm:left-3">
           <span className="h-1.5 w-1.5 rounded-full bg-success-400" aria-hidden />
           {partner.avgTurnaround || "Turnaround on request"}
         </span>
