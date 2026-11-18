@@ -112,13 +112,34 @@ function buildSeedState(): AppState {
   };
 }
 
+/**
+ * Vendor directory data (name, bundled logo) is owned by the seed, not by the
+ * browser snapshot. Older v8 snapshots predate the vendor rename/logo fields,
+ * so merge those fields back on load. User-created data (requests, customers,
+ * timeline, uploaded logoUrl) is left untouched.
+ */
+function withCurrentVendors(parsed: AppState): AppState {
+  const seedById = new Map(seedPartners.map((p) => [p.id, p]));
+  parsed.partners = (parsed.partners ?? []).map((partner) => {
+    const seed = seedById.get(partner.id);
+    if (!seed) return partner;
+    return {
+      ...partner,
+      name: seed.name,
+      image: seed.image,
+      logoUrl: partner.logoUrl ?? seed.logoUrl,
+    };
+  });
+  return parsed;
+}
+
 function loadState(): AppState {
   if (typeof window === "undefined") return buildSeedState();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return buildSeedState();
     const parsed = JSON.parse(raw) as AppState;
-    if (parsed && parsed.version === STATE_VERSION) return parsed;
+    if (parsed && parsed.version === STATE_VERSION) return withCurrentVendors(parsed);
     return buildSeedState();
   } catch {
     return buildSeedState();
