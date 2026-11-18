@@ -253,6 +253,15 @@ export const REPAIR_SERVICE_MODE_LABELS: Record<string, string> = {
   remote: "Remote diagnosis (no visit)",
 };
 
+/** Inverter families a repair vendor can service. */
+export const REPAIR_SPECIALITIES = [
+  "String inverter",
+  "Central inverter",
+  "Hybrid inverter",
+  "Micro inverter",
+  "Pump inverter",
+] as const;
+
 /** Problem categories a customer can pick when raising a repair request. */
 export const REPAIR_PROBLEM_CATEGORIES = [
   "No output / zero generation",

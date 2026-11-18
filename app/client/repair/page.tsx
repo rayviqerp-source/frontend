@@ -32,11 +32,11 @@ import { EmptyState } from "@/components/ui/states";
 import { RepairCompanyCard } from "@/components/repair/repair-company-card";
 
 /**
- * Inverter repair request form (client app).
+ * Inverter repair directory + request form (public client app).
  *
- * A customer picks a repair company, describes the fault and submits. The
- * request lands with the company as `pending` and the customer tracks it
- * from the repair tracker.
+ * The repair company directory is public: guests browse the same vendors as
+ * signed-in customers. Only sending a request needs a customer session, so
+ * the form is replaced by a sign-in CTA for anonymous visitors.
  */
 export default function ClientRepairRequestPage() {
   const { state, createRepairRequest, toast } = useStore();
@@ -78,23 +78,6 @@ export default function ClientRepairRequestPage() {
     setPincode((v) => v || customer.pincode);
   };
 
-  if (!customer) {
-    return (
-      <Card className="p-5">
-        <EmptyState
-          icon={<UserRound className="h-5 w-5" />}
-          title="Sign in to raise a repair request"
-          description="Create an account or sign in with your mobile number to request inverter repair."
-          action={
-            <Link href="/client/login">
-              <Button>Sign in</Button>
-            </Link>
-          }
-        />
-      </Card>
-    );
-  }
-
   if (created) {
     return (
       <div className="space-y-4">
@@ -131,6 +114,7 @@ export default function ClientRepairRequestPage() {
   }
 
   const submit = () => {
+    if (!customer) return; // guests browse only — the store also enforces this
     const capacityNum = capacity.trim() ? Number(capacity) : undefined;
     const result = createRepairRequest({
       customerId: customer.id,
@@ -222,8 +206,12 @@ export default function ClientRepairRequestPage() {
           {/* ---------- 1. Choose a company ---------- */}
           <Card>
             <CardHeader
-              title="1. Choose a repair company"
-              description="Each company is a verified RAYVIQ service partner with its own specialities."
+              title={customer ? "1. Choose a repair company" : "Browse repair vendors"}
+              description={
+                customer
+                  ? `${companies.length} verified RAYVIQ repair vendors — pick the one that fits your inverter.`
+                  : `${companies.length} verified repair vendors — browse freely, no sign-in needed.`
+              }
             />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {companies.map((p) => (
@@ -243,6 +231,8 @@ export default function ClientRepairRequestPage() {
             )}
           </Card>
 
+          {customer ? (
+            <>
           {/* ---------- 2. Contact ---------- */}
           <Card>
             <CardHeader
@@ -485,6 +475,21 @@ export default function ClientRepairRequestPage() {
             {preferredDate ? ` · preferred ${formatDate(preferredDate)}` : ""}
             <CalendarClock className="h-3 w-3" aria-hidden />
           </p>
+            </>
+          ) : (
+            <Card className="p-5">
+              <EmptyState
+                icon={<UserRound className="h-5 w-5" />}
+                title="Sign in to send a repair request"
+                description="You can browse every repair vendor above without an account. Sign in as a customer to describe your issue and send a request."
+                action={
+                  <Link href="/client/login">
+                    <Button>Sign in to continue</Button>
+                  </Link>
+                }
+              />
+            </Card>
+          )}
         </>
       )}
     </div>

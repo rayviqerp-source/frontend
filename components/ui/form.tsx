@@ -262,24 +262,38 @@ export function Checkbox({
   );
 }
 
+/** File plus its base64 data URL — the shape the backend upload API accepts. */
+export interface UploadedFile {
+  name: string;
+  dataUrl: string;
+}
+
+/**
+ * Shared file input. Existing callers only need file names (`onFiles`);
+ * callers that persist an image can also read bytes with `onFilesData`.
+ */
 export function FileUpload({
   label,
   hint,
   multiple,
   onFiles,
+  onFilesData,
   accept = "image/*,.pdf",
+  prompt = "Click to attach files",
 }: {
   label?: string;
   hint?: string;
   multiple?: boolean;
-  onFiles: (names: string[]) => void;
+  onFiles?: (names: string[]) => void;
+  onFilesData?: (files: UploadedFile[]) => void;
   accept?: string;
+  prompt?: string;
 }) {
   return (
     <div>
       {label && <Label hint={hint}>{label}</Label>}
       <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong bg-surface-alt px-4 py-5 text-center transition-colors hover:border-brand-400 hover:bg-brand-50/40">
-        <span className="text-[13px] font-medium text-ink">Click to attach files</span>
+        <span className="text-[13px] font-medium text-ink">{prompt}</span>
         <span className="text-xs text-ink-faint">
           Photos, PDFs — stored locally in this demo only
         </span>
@@ -288,9 +302,25 @@ export function FileUpload({
           className="sr-only"
           multiple={multiple}
           accept={accept}
-          onChange={(e) => {
-            const names = Array.from(e.target.files ?? []).map((f) => f.name);
-            if (names.length) onFiles(names);
+          onChange={async (e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (!files.length) return;
+            onFiles?.(files.map((f) => f.name));
+            if (onFilesData) {
+              const data = await Promise.all(
+                files.map(
+                  (file) =>
+                    new Promise<UploadedFile>((resolve, reject) => {
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        resolve({ name: file.name, dataUrl: String(reader.result ?? "") });
+                      reader.onerror = () => reject(reader.error);
+                      reader.readAsDataURL(file);
+                    }),
+                ),
+              );
+              onFilesData(data);
+            }
             e.target.value = "";
           }}
         />

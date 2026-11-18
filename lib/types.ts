@@ -96,6 +96,8 @@ export interface ServicePartner {
   serviceModes?: string[];
   avgTurnaround?: string;
   jobsCompleted?: number;
+  /** Company logo (data URL or hosted URL). Absent → branded initials placeholder. */
+  logoUrl?: string;
 }
 
 export interface Engineer {

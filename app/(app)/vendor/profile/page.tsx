@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
   Building2,
+  CheckCircle2,
   ClipboardList,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Star,
   TicketIcon,
@@ -19,9 +22,11 @@ import { useStore } from "@/lib/store";
 import { usePartnerScope } from "@/components/vendor/scope";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatDate, initials } from "@/lib/utils";
+import { uploadCompanyLogo } from "@/lib/api";
 import { Card, CardHeader, PageHeader, StatCard } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileUpload, type UploadedFile } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/states";
 
 /**
@@ -59,8 +64,28 @@ const BOTTOM_ACTIONS = [
 ];
 
 export default function VendorProfilePage() {
-  const { currentUser } = useStore();
+  const { currentUser, setRepairCompanyLogo } = useStore();
   const { partner, engineers } = usePartnerScope();
+  const [editingLogo, setEditingLogo] = useState(false);
+  const [logoFile, setLogoFile] = useState<UploadedFile | null>(null);
+  const [savingLogo, setSavingLogo] = useState(false);
+
+  const saveLogo = async () => {
+    if (!partner || !logoFile) return;
+    setSavingLogo(true);
+    try {
+      const logoUrl = await uploadCompanyLogo({
+        name: logoFile.name,
+        dataUrl: logoFile.dataUrl,
+        partnerId: partner.id,
+      });
+      setRepairCompanyLogo(partner.id, logoUrl);
+      setEditingLogo(false);
+      setLogoFile(null);
+    } finally {
+      setSavingLogo(false);
+    }
+  };
 
   if (!currentUser) return null;
 
@@ -107,12 +132,21 @@ export default function VendorProfilePage() {
       {/* Company identity */}
       <Card className="mb-4 p-5">
         <div className="flex flex-wrap items-center gap-4">
-          <span
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white"
-            aria-hidden
-          >
-            {initials(partner.name)}
-          </span>
+          {partner.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- vendor logo from a data URL or hosted URL
+            <img
+              src={partner.logoUrl}
+              alt={`${partner.name} logo`}
+              className="h-16 w-16 shrink-0 rounded-2xl bg-surface-alt object-cover ring-1 ring-line"
+            />
+          ) : (
+            <span
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white"
+              aria-hidden
+            >
+              {initials(partner.name)}
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-ink">
               {partner.name}
@@ -135,7 +169,50 @@ export default function VendorProfilePage() {
               </span>
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditingLogo((v) => !v);
+              setLogoFile(null);
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
+            {partner.logoUrl ? "Change logo" : "Add logo"}
+          </Button>
         </div>
+
+        {editingLogo && (
+          <div className="mt-4 space-y-3 border-t border-line pt-4">
+            <FileUpload
+              label="Company logo"
+              hint="PNG or JPG. Displayed on your public repair vendor card; a branded initial tile is used when empty."
+              accept="image/*"
+              prompt="Upload company logo"
+              onFilesData={(files) => setLogoFile(files[0] ?? null)}
+            />
+            {logoFile && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={saveLogo} loading={savingLogo}>
+                  Save logo
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setLogoFile(null);
+                    setEditingLogo(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success-600" aria-hidden />
+                  {logoFile.name}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Team stats */}

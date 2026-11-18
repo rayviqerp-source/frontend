@@ -56,3 +56,19 @@ export function inverterArtFor(engineer: ArtSource): string {
 export function autoInverterArtFor(engineer: Pick<Engineer, "productExpertise">): string {
   return inverterArtFor({ productExpertise: engineer.productExpertise });
 }
+
+/**
+ * Inverter artwork for a repair company banner. Company specialities are
+ * stored as human labels ("String inverter", "Hybrid inverter", …), so map
+ * them onto the same illustration set used by the engineer cards.
+ */
+export function inverterArtForPartner(specialities: string[] = []): string {
+  const match = (needle: string) =>
+    specialities.find((s) => s.toLowerCase().includes(needle));
+  if (match("pump")) return INVERTER_ART_BY_CATEGORY.pump_inverter;
+  if (match("hybrid")) return INVERTER_ART_BY_CATEGORY.hybrid_inverter;
+  if (match("micro")) return INVERTER_ART_BY_CATEGORY.micro_inverter;
+  if (match("central")) return INVERTER_ART_BY_CATEGORY.central_inverter;
+  if (match("string")) return INVERTER_ART_BY_CATEGORY.string_inverter;
+  return DEFAULT_INVERTER_ART;
+}

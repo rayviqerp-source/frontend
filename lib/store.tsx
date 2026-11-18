@@ -221,6 +221,13 @@ interface StoreContextValue {
     status: ServicePartner["status"],
     note?: string,
   ) => boolean;
+  /** Vendor registration — create a repair company that appears in the public directory. */
+  addRepairCompany: (
+    input: Pick<ServicePartner, "name" | "contactName" | "phone" | "email" | "city" | "state"> &
+      Partial<ServicePartner>,
+  ) => ServicePartner;
+  /** Persist a company logo reference (hosted URL or data URL) on the partner record. */
+  setRepairCompanyLogo: (companyId: string, logoUrl: string) => boolean;
   /* engineers */
   setEngineerVerification: (engineerId: string, status: Engineer["verification"], note?: string) => void;
   setEngineerStatus: (engineerId: string, status: Engineer["status"], note?: string) => void;
@@ -1488,6 +1495,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [mutate, toast],
   );
 
+  const addRepairCompany = useCallback<StoreContextValue["addRepairCompany"]>(
+    (input) => {
+      const maxN = state.partners.reduce((m, p) => {
+        const n = Number(p.id.replace(/\D/g, ""));
+        return Number.isFinite(n) && p.id.startsWith("SP-") ? Math.max(m, n) : m;
+      }, 0);
+      const company: ServicePartner = {
+        ...input,
+        id: `SP-${String(maxN + 1).padStart(2, "0")}`,
+        since: input.since ?? todayIso().slice(0, 10),
+        status: input.status ?? "active",
+        rating: input.rating ?? 0,
+        repairSpecialities: input.repairSpecialities ?? [],
+        brandsServiced: input.brandsServiced ?? [],
+        serviceModes: input.serviceModes ?? ["on_site"],
+        avgTurnaround: input.avgTurnaround ?? "—",
+        jobsCompleted: input.jobsCompleted ?? 0,
+      };
+      mutate((d) => {
+        d.partners.push(company);
+        audit(d, "Repair company registered", company.name, company.city, "info", company.id);
+        notify(d, {
+          title: "New repair company registered",
+          body: `${company.name} — ${company.city}. Visible to customers in the repair directory.`,
+          type: "system",
+          audience: ["super_admin", "ops_manager"],
+        });
+      });
+      toast("Repair company registered", {
+        description: "Your company is now listed in the public repair directory.",
+      });
+      return company;
+    },
+    [mutate, toast, state.partners],
+  );
+
+  const setRepairCompanyLogo = useCallback<StoreContextValue["setRepairCompanyLogo"]>(
+    (companyId, logoUrl) => {
+      let applied = false;
+      mutate((d) => {
+        const partner = d.partners.find((p) => p.id === companyId);
+        if (!partner) return;
+        partner.logoUrl = logoUrl;
+        audit(d, "Company logo updated", partner.name, undefined, "info", partner.id);
+        applied = true;
+      });
+      if (applied) toast("Company logo saved");
+      return applied;
+    },
+    [mutate, toast],
+  );
+
   /* ---------------- engineers ---------------- */
 
   const setEngineerVerification = useCallback<StoreContextValue["setEngineerVerification"]>(
@@ -1823,6 +1882,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     respondToRepairRequest,
     setRepairRequestStatus,
     setRepairCompanyStatus,
+    addRepairCompany,
+    setRepairCompanyLogo,
     setEngineerVerification,
     setEngineerStatus,
     updateEngineer,
