@@ -47,7 +47,10 @@ export function ClientHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6 lg:max-w-6xl">
-        <BrandLogo href={signedIn ? "/client" : "/client/login"} label="Client" priority />
+        {/* Keep the server-rendered href until after mount — the store may
+            already be hydrated when this header hydrates in its own Suspense
+            boundary, which would otherwise change href during hydration. */}
+        <BrandLogo href={mounted && signedIn ? "/client" : "/client/login"} label="Client" priority />
 
         {!mounted || !ready ? (
           /* Avoid a wrong-state flash while the store rehydrates */
