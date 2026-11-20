@@ -12,7 +12,7 @@ import { cn, initials } from "@/lib/utils";
 const CLIENT_LINKS = [
   { href: "/client", label: "Home" },
   { href: "/client/bookings", label: "Bookings" },
-  { href: "/client/repairs", label: "Repairs" },
+  { href: "/client/repair", label: "Repairs" },
   { href: "/marketplace", label: "Experts" },
 ];
 
@@ -93,6 +93,12 @@ export function ClientHeader() {
           </div>
         ) : (
           <nav className="flex items-center gap-1.5" aria-label="Client">
+            <Link
+              href="/client/repair"
+              className="rounded-lg px-2.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-alt hover:text-ink"
+            >
+              Repair
+            </Link>
             <Link
               href="/marketplace"
               className="rounded-lg px-2.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-alt hover:text-ink"

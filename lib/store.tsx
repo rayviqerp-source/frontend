@@ -203,6 +203,13 @@ interface StoreContextValue {
   currentUser: DemoUser | null;
   effectiveRole: Role;
   login: (userId: string) => void;
+  /** Sign in a backend-registered account (creates a matching local user record). */
+  loginRemoteUser: (input: {
+    email: string;
+    name: string;
+    platformRole?: string;
+    company?: string | null;
+  }) => DemoUser;
   logout: () => void;
   setRoleOverride: (role: Role | null) => void;
   /* toasts */
@@ -506,6 +513,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       d.roleOverride = null;
     });
   }, [mutate]);
+
+  const loginRemoteUser = useCallback<StoreContextValue["loginRemoteUser"]>(
+    (input) => {
+      const holder: { user?: DemoUser } = {};
+      mutate((d) => {
+        const email = input.email.toLowerCase();
+        let user = d.users.find((u) => u.email.toLowerCase() === email);
+        if (!user) {
+          const maxN = d.users.reduce((m, u) => {
+            const n = Number(u.id.replace(/\D/g, ""));
+            return Number.isFinite(n) && u.id.startsWith("USR-") ? Math.max(m, n) : m;
+          }, 0);
+          const role = (
+            ["oem_admin", "oem_service_manager", "oem_service_executive", "partner_manager", "engineer", "super_admin", "ops_manager", "support_executive"].includes(
+              input.platformRole ?? "",
+            )
+              ? input.platformRole
+              : "oem_admin"
+          ) as Role;
+          user = {
+            id: `USR-${String(maxN + 1).padStart(2, "0")}`,
+            name: input.name,
+            email,
+            role,
+            oemId: role.startsWith("oem_") ? "OEM-001" : null,
+            partnerId: role === "partner_manager" || role === "engineer" ? "SP-01" : null,
+            engineerId: role === "engineer" ? "ENG-01" : null,
+            phone: "",
+            designation: input.company ?? undefined,
+            avatarColor: "#2554e0",
+            createdAt: todayIso(),
+          };
+          d.users.push(user);
+          audit(
+            d,
+            "Workspace account signed in",
+            `${user.name} (${user.id})`,
+            `Registered account · ${email}`,
+            "info",
+            user.id,
+          );
+        }
+        d.currentUserId = user.id;
+        d.roleOverride = null;
+        holder.user = user;
+      });
+      if (!holder.user) throw new Error("Remote sign-in failed");
+      return holder.user;
+    },
+    [mutate],
+  );
 
   const logout = useCallback(() => {
     mutate((d) => {
@@ -1891,6 +1949,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     currentUser,
     effectiveRole,
     login,
+    loginRemoteUser,
     logout,
     setRoleOverride,
     toasts,

@@ -7,7 +7,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -54,6 +54,7 @@ export default function MarketplaceProfilePage() {
 
 function ProfileContent() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { state, ready, toast } = useStore();
   const [requestOpen, setRequestOpen] = useState(false);
   const [issue, setIssue] = useState("");
@@ -104,6 +105,18 @@ function ProfileContent() {
   const platformScore = Math.round(
     engineer.rating * 10 * 0.4 + engineer.reportQualityScore * 0.3 + engineer.acceptanceRate * 0.3,
   );
+
+  const signedIn = Boolean(
+    state.currentUserId || state.portalCustomerId || state.portalCustomerIds.length > 0,
+  );
+  const openRequest = () => {
+    if (!signedIn) {
+      toast("Sign in to request this expert", { tone: "info" });
+      router.push(`/client/login?next=${encodeURIComponent(`/marketplace/${params.id}`)}`);
+      return;
+    }
+    setRequestOpen(true);
+  };
 
   const submitRequest = () => {
     if (!issue.trim() || !contact.trim()) return;
@@ -171,7 +184,7 @@ function ProfileContent() {
           </div>
 
           <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-            <Button onClick={() => setRequestOpen(true)}>
+            <Button onClick={openRequest}>
               <Sparkles className="h-4 w-4" aria-hidden /> Request this expert
             </Button>
             <p className="inline-flex items-center gap-1.5 text-[13px] text-ink-muted">

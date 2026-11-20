@@ -175,10 +175,15 @@ export default function ClientRepairRequestPage() {
 
   const field = (name: string) => errors[name];
   const openForm = (id: string) => {
+    if (!customer) {
+      toast("Sign in to request a repair", { tone: "info" });
+      router.push("/client/login?next=/client/repair");
+      return;
+    }
     setCompanyId(id);
     setErrors({});
     setFormOpen(true);
-    if (customer && !contactName) prefill();
+    if (!contactName) prefill();
   };
 
   const pickProduct = (value: "inverter" | "battery" | "other") => {
@@ -257,7 +262,7 @@ export default function ClientRepairRequestPage() {
           </div>
           <p className="mt-3 flex items-center justify-center gap-1.5 text-[11.5px] text-ink-faint">
             <Info className="h-3 w-3" aria-hidden />
-            No sign-in needed to browse — you will be asked to sign in only when you send.
+            Browse freely — you will be asked to sign in when you tap a company.
           </p>
         </Card>
       )}

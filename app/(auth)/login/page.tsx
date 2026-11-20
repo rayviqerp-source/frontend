@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Building2,
@@ -14,10 +14,30 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { googleSignIn, loginWithPassword } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import { cn, initials } from "@/lib/utils";
+
+/** Public OAuth client ID — a missing value hides the Google option. */
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
+type GoogleIdentity = {
+  accounts: {
+    id: {
+      initialize: (config: {
+        client_id: string;
+        callback: (response: { credential?: string }) => void;
+        cancel_callback?: () => void;
+      }) => void;
+      renderButton: (
+        container: HTMLElement,
+        config: { theme: string; size: string; text: string; shape: string; width: number },
+      ) => void;
+    };
+  };
+};
 
 const DEMO_ACCOUNTS = [
   { id: "USR-01", email: "priya@voltrix.example", password: "demo1234" },
@@ -50,36 +70,158 @@ const HIGHLIGHTS = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, state, toast } = useStore();
-  const [email, setEmail] = useState("priya@voltrix.example");
-  const [password, setPassword] = useState("demo1234");
+  const { login, loginRemoteUser, state, toast, portalLogin, registerCustomer } = useStore();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  /* ---- Google Sign-In (customers land in the client app) ---- */
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const gsiInitializedRef = useRef(false);
+  const [googleScriptFailed, setGoogleScriptFailed] = useState(false);
+
+  const completeGoogleSignIn = useCallback(
+    async (idToken: string) => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await googleSignIn(idToken);
+        const emailAddress = result.profile.email.toLowerCase();
+        const existing = state.customers.find(
+          (c) => (c.email ?? "").toLowerCase() === emailAddress,
+        );
+        if (existing) {
+          portalLogin(existing.id);
+          toast(`Welcome, ${existing.name.split(" ")[0]}`, {
+            description: "Signed in with Google.",
+          });
+        } else {
+          const created = registerCustomer({
+            name: result.profile.name,
+            email: emailAddress,
+            phone: "",
+            city: "",
+          });
+          toast(`Welcome, ${created.name.split(" ")[0]}`, {
+            description: "Account created with Google.",
+          });
+        }
+        router.push("/client");
+      } catch (err) {
+        setLoading(false);
+        setError(err instanceof Error ? err.message : "Google Sign-In failed. Please try again.");
+      }
+    },
+    [state.customers, portalLogin, registerCustomer, toast, router],
+  );
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let active = true;
+    const setup = () => {
+      const g = (window as Window & { google?: GoogleIdentity }).google;
+      if (!active || !g || !googleButtonRef.current) return false;
+      try {
+        g.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response) => {
+            if (!response.credential) {
+              setLoading(false);
+              setError("Google sign-in was cancelled. Please try again.");
+              return;
+            }
+            void completeGoogleSignIn(response.credential);
+          },
+          cancel_callback: () => {
+            setLoading(false);
+            setError("Google sign-in was cancelled. Please try again.");
+          },
+        });
+        g.accounts.id.renderButton(googleButtonRef.current, {
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "rectangular",
+          width: 320,
+        });
+        return true;
+      } catch {
+        setGoogleScriptFailed(true);
+        return false;
+      }
+    };
+
+    const init = () => {
+      if (gsiInitializedRef.current) return;
+      if (setup()) gsiInitializedRef.current = true;
+    };
+    const w = window as Window & { google?: GoogleIdentity };
+    if (w.google) {
+      init();
+      return () => {
+        active = false;
+      };
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = init;
+    script.onerror = () => setGoogleScriptFailed(true);
+    document.body.appendChild(script);
+    return () => {
+      active = false;
+    };
+  }, [completeGoogleSignIn]);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    window.setTimeout(() => {
-      const match = state.users.find(
-        (u) => u.email.toLowerCase() === email.trim().toLowerCase(),
-      );
-      if (!match) {
-        setError("No demo account found for this email. Use one of the demo accounts below.");
-        setLoading(false);
+    const emailValue = email.trim();
+
+    try {
+      /* Registered accounts are verified against MongoDB via the backend. */
+      const session = await loginWithPassword(emailValue, password);
+      if (session) {
+        const profile = session.user;
+        const user = loginRemoteUser({
+          email: profile.email ?? emailValue,
+          name: profile.name,
+          platformRole: profile.platformRole,
+          company: profile.company,
+        });
+        toast(`Welcome back, ${user.name.split(" ")[0]}`, {
+          description: `Signed in as ${ROLE_LABELS[user.role]}.`,
+        });
+        router.push("/dashboard");
         return;
       }
-      if (password.length < 4) {
-        setError("Password must be at least 4 characters (demo: any password works).");
-        setLoading(false);
-        return;
-      }
-      login(match.id);
-      toast(`Welcome back, ${match.name.split(" ")[0]}`, {
-        description: `Signed in as ${ROLE_LABELS[match.role]}.`,
-      });
-      router.push("/dashboard");
-    }, 450);
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+      return;
+    }
+
+    /* Demo personas stay available without a backend session. */
+    const match = state.users.find(
+      (u) => u.email.toLowerCase() === emailValue.toLowerCase(),
+    );
+    if (!match) {
+      setError("No account found for this email. Create an account or use a demo account below.");
+      setLoading(false);
+      return;
+    }
+    if (password.length < 4) {
+      setError("Password must be at least 4 characters.");
+      setLoading(false);
+      return;
+    }
+    login(match.id);
+    toast(`Welcome back, ${match.name.split(" ")[0]}`, {
+      description: `Signed in as ${ROLE_LABELS[match.role]}.`,
+    });
+    router.push("/dashboard");
   };
 
   const quickSignIn = (userId: string) => {
@@ -154,7 +296,7 @@ export default function LoginPage() {
               Sign in to your workspace
             </h2>
             <p className="mt-1 text-[13px] text-ink-muted">
-              Use a demo account below, or enter any 4+ character password.
+              Sign in with your registered email and password, or use a demo account below.
             </p>
 
             <form onSubmit={submit} className="mt-4 space-y-3.5">
@@ -171,7 +313,7 @@ export default function LoginPage() {
               />
               <Input
                 label="Password"
-                hint="Demo: any 4+ characters"
+                hint="Your registered password"
                 type="password"
                 name="password"
                 autoComplete="current-password"
@@ -197,6 +339,27 @@ export default function LoginPage() {
                 Sign in <ArrowRight className="h-4 w-4" />
               </Button>
             </form>
+
+            {GOOGLE_CLIENT_ID ? (
+              <div className="mt-4">
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-line" />
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <div ref={googleButtonRef} className="mt-3 flex justify-center" />
+                {googleScriptFailed && (
+                  <p className="mt-2 text-center text-xs text-danger-600">
+                    Google Sign-In could not load. Check your connection and try again.
+                  </p>
+                )}
+                <p className="mt-2 text-center text-[11px] text-ink-faint">
+                  Google accounts sign in to the customer app.
+                </p>
+              </div>
+            ) : null}
 
             <p className="mt-4 border-t border-line pt-3.5 text-center text-[13px] text-ink-muted">
               New here — OEM, service partner or field engineer?{" "}
@@ -260,8 +423,8 @@ export default function LoginPage() {
 
       <p className="mt-5 flex items-start gap-1.5 text-xs leading-5 text-ink-faint">
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Demo authentication only. Client-side role checks are not security — real
-        enforcement belongs on the backend.
+        Registered accounts sign in against the RAYVIQ backend. Demo personas are
+        for previewing roles only.
       </p>
     </div>
   );

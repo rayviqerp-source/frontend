@@ -167,6 +167,9 @@ function RepairDetailContent({ params }: { params: Promise<{ id: string }> }) {
               <UserRound className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
               {request.contact.name}
             </p>
+            {request.contact.company && (
+              <p className="truncate text-ink-faint">{request.contact.company}</p>
+            )}
             <p className="flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
               {request.contact.phone}

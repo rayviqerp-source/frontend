@@ -189,6 +189,12 @@ export function HomePage() {
               How it works
             </a>
             <Link
+              href="/client/repair"
+              className="rounded-lg px-2.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-alt hover:text-ink"
+            >
+              Inverter Repair
+            </Link>
+            <Link
               href="/marketplace"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-alt hover:text-ink md:block"
             >

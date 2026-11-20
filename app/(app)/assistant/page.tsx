@@ -1,13 +1,49 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Handshake, Sparkles, Send, Ticket, Wrench, ShieldCheck } from "lucide-react";import { useStore } from "@/lib/store";
+import {
+  Bot,
+  Handshake,
+  Mic,
+  MicOff,
+  ShieldCheck,
+  Sparkles,
+  Send,
+  Ticket,
+  Volume2,
+  VolumeX,
+  Wrench,
+} from "lucide-react";
+import { useStore } from "@/lib/store";
+import { sendAssistantMessage } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/constants";
-import { localId, relativeTime } from "@/lib/utils";
+import { cn, localId, relativeTime } from "@/lib/utils";
 import type { AiMessage } from "@/lib/types";
 import { PageHeader, Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+/** Minimal Web Speech API shapes (not in every TypeScript DOM lib). */
+type SpeechResultEvent = { results: ArrayLike<ArrayLike<{ transcript: string }>> };
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: SpeechResultEvent) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 const RULES: { test: RegExp; answer: string; suggestions?: string[] }[] = [
   {
@@ -90,29 +126,36 @@ export default function AssistantPage() {
     {
       id: localId("MSG"),
       role: "assistant",
-      text: "Hi! I'm the RAYVIQ service assistant. Ask me how tickets, assignments, reports, SLAs or AMC work in this platform. I run on scripted demo logic — no external AI service is connected.",
+      text: "Hi! I'm the RAYVIQ service assistant. Ask me how tickets, assignments, reports, SLAs or AMC work in this platform. I explain workflows only — warranty, repair and replacement decisions stay with the OEM.",
       at: new Date().toISOString(),
       suggestions: ["Show the ticket lifecycle", "How does assignment matching work?", "Tell me about AMC"],
     },
   ]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef("");
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, typing]);
 
-  const answerFor = (text: string): { text: string; suggestions?: string[] } => {
-    const rule = RULES.find((r) => r.test.test(text));
-    if (!rule) return { text: RULES[RULES.length - 1].answer, suggestions: RULES[RULES.length - 1].suggestions };
-    return {
-      text: rule.answer,
-      suggestions: rule.suggestions,
+  useEffect(() => {
+    setSpeechSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+    return () => {
+      recognitionRef.current?.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     };
-  };
+  }, []);
 
-  const send = (text: string) => {
+  const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || typing) return;
     const userMsg: AiMessage = {
@@ -121,11 +164,16 @@ export default function AssistantPage() {
       text: trimmed,
       at: new Date().toISOString(),
     };
+    const history = messages.map((m) => ({ role: m.role, text: m.text }));
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setTyping(true);
-    window.setTimeout(() => {
-      const { text: reply, suggestions } = answerFor(trimmed);
+    try {
+      const reply = await sendAssistantMessage({
+        message: trimmed,
+        history,
+        role: ROLE_LABELS[effectiveRole],
+      });
       setMessages((m) => [
         ...m,
         {
@@ -133,12 +181,99 @@ export default function AssistantPage() {
           role: "assistant",
           text: reply,
           at: new Date().toISOString(),
-          suggestions,
           handoffOffered: /human|person|agent|support|talk/i.test(trimmed),
         },
       ]);
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: localId("MSG"),
+          role: "assistant",
+          text: `Sorry — I couldn't get an answer right now. ${err instanceof Error ? err.message : ""}`.trim(),
+          at: new Date().toISOString(),
+        },
+      ]);
+    } finally {
       setTyping(false);
-    }, 550);
+    }
+  };
+
+  /** Voice input: speech-to-text, then send the transcript as a normal message. */
+  const toggleListening = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setVoiceError("Voice input is not supported in this browser. Type your question instead.");
+      return;
+    }
+
+    setVoiceError("");
+    finalTranscriptRef.current = "";
+    const recognition = new Recognition();
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      finalTranscriptRef.current = transcript.trim();
+      setInput(finalTranscriptRef.current);
+    };
+    recognition.onerror = (event) => {
+      setListening(false);
+      setVoiceError(
+        event.error === "not-allowed" || event.error === "service-not-allowed"
+          ? "Microphone permission denied. Allow microphone access and try again."
+          : event.error === "no-speech"
+            ? "No speech detected. Please try again."
+            : `Voice input failed (${event.error}).`,
+      );
+    };
+    recognition.onend = () => {
+      setListening(false);
+      const transcript = finalTranscriptRef.current;
+      finalTranscriptRef.current = "";
+      if (transcript) void send(transcript);
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+    } catch {
+      setVoiceError("Could not start voice input. Please try again.");
+      setListening(false);
+    }
+  };
+
+  /** Voice output: read an assistant reply aloud, or stop the current one. */
+  const toggleSpeech = (id: string, text: string) => {
+    if (!speechSupported) {
+      setVoiceError("Voice output is not supported in this browser.");
+      return;
+    }
+    setVoiceError("");
+    if (speakingId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.onend = () => setSpeakingId(null);
+    utterance.onerror = () => {
+      setSpeakingId(null);
+      setVoiceError("Voice playback failed.");
+    };
+    setSpeakingId(id);
+    window.speechSynthesis.speak(utterance);
   };
 
   const openTicketCount = state.tickets.filter((t) => t.status !== "closed" && t.status !== "completed").length;
@@ -147,7 +282,7 @@ export default function AssistantPage() {
     <div className="mx-auto max-w-4xl">
       <PageHeader
         title="AI Service Assistant"
-        description="A demonstration assistant grounded in RAYVIQ's workflows. Rules-based (no live LLM) — it explains how the platform works and never makes warranty or replacement decisions."
+        description="An AI assistant grounded in RAYVIQ's workflows. It explains how the platform works and never makes warranty or replacement decisions."
         actions={
           <Button
             variant="outline"
@@ -166,7 +301,7 @@ export default function AssistantPage() {
           { label: "Open tickets", value: openTicketCount, icon: Ticket },
           { label: "My role", value: ROLE_LABELS[effectiveRole].split(" ")[0], icon: ShieldCheck },
           { label: "Engineers", value: state.engineers.length, icon: Wrench },
-          { label: "Mode", value: "Demo rules", icon: Sparkles },
+          { label: "Mode", value: "Live AI", icon: Sparkles },
         ].map((s) => (
           <Card key={s.label} className="p-3.5">
             <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
@@ -185,11 +320,11 @@ export default function AssistantPage() {
           <div>
             <p className="text-sm font-semibold text-ink">RAYVIQ Assistant</p>
             <p className="text-[11px] text-ink-muted">
-              Rules-based demo · knows {RULES.length} topics · no data leaves this browser
+              AI-powered · grounded in {RULES.length} workflow topics
             </p>
           </div>
           <Badge tone="cyan" className="ml-auto">
-            Offline AI
+            AI
           </Badge>
         </div>
 
@@ -230,9 +365,25 @@ export default function AssistantPage() {
                     </p>
                   </div>
                 )}
-                <p className={`mt-1.5 text-[10px] ${m.role === "user" ? "text-white/60" : "text-ink-faint"}`}>
-                  {relativeTime(m.at)}
-                </p>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <p className={`text-[10px] ${m.role === "user" ? "text-white/60" : "text-ink-faint"}`}>
+                    {relativeTime(m.at)}
+                  </p>
+                  {m.role === "assistant" && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSpeech(m.id, m.text)}
+                      aria-label={speakingId === m.id ? "Stop speaking" : "Speak response"}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-brand-600"
+                    >
+                      {speakingId === m.id ? (
+                        <VolumeX className="h-3.5 w-3.5" />
+                      ) : (
+                        <Volume2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -266,10 +417,25 @@ export default function AssistantPage() {
             aria-label="Message the assistant"
             className="h-10 flex-1 rounded-lg border border-line-strong bg-surface px-3.5 text-sm placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={toggleListening}
+            aria-label={listening ? "Stop listening" : "Speak your question"}
+            className={cn(listening && "border-danger-300 bg-danger-50 text-danger-600")}
+          >
+            {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </Button>
           <Button type="submit" size="icon" disabled={!input.trim() || typing} aria-label="Send">
             <Send className="h-4 w-4" />
           </Button>
         </form>
+        {voiceError && (
+          <p className="border-t border-line px-4 py-2 text-center text-xs text-danger-600" role="alert">
+            {voiceError}
+          </p>
+        )}
       </Card>
 
       <p className="mt-3 text-center text-xs text-ink-faint">

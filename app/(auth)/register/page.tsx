@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { FileUpload, Input, Select } from "@/components/ui/form";
 import { Card, CardHeader } from "@/components/ui/card";
 import { useStore } from "@/lib/store";
-import { REPAIR_SERVICE_MODES, REPAIR_SPECIALITIES } from "@/lib/constants";
-import { uploadCompanyLogo } from "@/lib/api";
+import { REPAIR_SERVICE_MODES, REPAIR_SPECIALITIES, ROLE_LABELS } from "@/lib/constants";
+import { registerAccount, uploadCompanyLogo } from "@/lib/api";
 
 /** Workspace roles a self-serve registration may pick (platform staff excluded). */
 const ROLE_OPTIONS = [
@@ -22,8 +22,9 @@ const ROLE_OPTIONS = [
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { addRepairCompany } = useStore();
-  const [done, setDone] = useState(false);
+  const { addRepairCompany, loginRemoteUser, toast } = useStore();
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState("");
   const [form, setForm] = useState({
     company: "",
     name: "",
@@ -68,58 +69,59 @@ export default function RegisterPage() {
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    if (isVendor) {
-      const logoUrl = form.logoDataUrl
-        ? await uploadCompanyLogo({
-            name: form.logoName,
-            dataUrl: form.logoDataUrl,
-            partnerId: form.company.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-          })
-        : undefined;
-      addRepairCompany({
-        name: form.company.trim(),
-        contactName: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        city: form.city.trim(),
-        state: form.state.trim() || "—",
-        repairSpecialities: form.specialities,
-        serviceModes: form.serviceModes.length ? form.serviceModes : ["on_site"],
-        avgTurnaround: form.turnaround.trim() || "48–72 hrs",
-        ...(logoUrl ? { logoUrl } : {}),
-      });
-    }
-    setDone(true);
-  };
+    /* Create the real account in MongoDB via the backend. */
+    setSubmitting(true);
+    setServerError("");
+    try {
+      /* Vendors also appear in the public repair directory. */
+      if (isVendor) {
+        const logoUrl = form.logoDataUrl
+          ? await uploadCompanyLogo({
+              name: form.logoName,
+              dataUrl: form.logoDataUrl,
+              partnerId: form.company.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            })
+          : undefined;
+        addRepairCompany({
+          name: form.company.trim(),
+          contactName: form.name.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+          city: form.city.trim(),
+          state: form.state.trim() || "—",
+          repairSpecialities: form.specialities,
+          serviceModes: form.serviceModes.length ? form.serviceModes : ["on_site"],
+          avgTurnaround: form.turnaround.trim() || "48–72 hrs",
+          ...(logoUrl ? { logoUrl } : {}),
+        });
+      }
 
-  if (done) {
-    return (
-      <div>
-        <div className="rounded-xl border border-success-100 bg-success-50 p-6 text-center">
-          <CheckCircle2 className="mx-auto h-10 w-10 text-success-600" />
-          <h1 className="mt-3 text-lg font-semibold text-ink">Check your inbox</h1>
-          <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-ink-muted">
-            We sent a verification link to <strong className="text-ink">{form.email}</strong>.
-            This is a demo — no real email was delivered.
-          </p>
-          {isVendor && (
-            <p className="mx-auto mt-2 max-w-sm text-[12px] leading-5 text-brand-700">
-              <strong>{form.company}</strong> is now visible to every visitor in the public repair
-              directory — no sign-in needed to find it.
-            </p>
-          )}
-        </div>
-        <div className="mt-5 flex flex-col gap-2">
-          <Button size="lg" onClick={() => router.push("/verify-email")}>
-            I have verified — continue
-          </Button>
-          <Button variant="outline" size="lg" onClick={() => router.push("/login")}>
-            Back to sign in
-          </Button>
-        </div>
-      </div>
-    );
-  }
+      const session = await registerAccount({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+        company: form.company.trim(),
+        phone: form.phone.trim(),
+        city: form.city.trim() || undefined,
+        state: form.state.trim() || undefined,
+      });
+      /* Make the workspace role-based UI aware of the registered account. */
+      const user = loginRemoteUser({
+        email: form.email.trim(),
+        name: form.name.trim(),
+        platformRole: session.user.platformRole ?? form.role,
+        company: form.company.trim(),
+      });
+      toast(`Welcome, ${user.name.split(" ")[0]}`, {
+        description: `Account created — signed in as ${ROLE_LABELS[user.role]}.`,
+      });
+      router.push("/dashboard");
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : "Registration failed. Please try again.");
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div>
@@ -289,13 +291,16 @@ export default function RegisterPage() {
               error={errors.password}
             />
           </div>
-          <Button type="submit" size="lg" className="w-full">
+          {serverError && (
+            <p className="rounded-lg border border-danger-100 bg-danger-50 px-3 py-2 text-center text-[12.5px] text-danger-700">
+              {serverError}
+            </p>
+          )}
+          <Button type="submit" size="lg" loading={submitting} className="w-full">
             Create account <ArrowRight className="h-4 w-4" />
           </Button>
           <p className="text-center text-xs leading-5 text-ink-faint">
-            {isVendor
-              ? "Demo registration — your company and logo are stored locally for this demo; no email is sent."
-              : "Demo registration — no account is actually created and no email is sent."}
+            Your account is created in the RAYVIQ database. No verification email is sent in this demo.
           </p>
         </form>
       </Card>
