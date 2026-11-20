@@ -20,7 +20,6 @@ import { useStore } from "@/lib/store";
 import { useActiveCustomer } from "@/lib/session";
 import {
   INVERTER_BRANDS,
-  PRODUCT_CATEGORY_LABELS,
   REPAIR_PROBLEM_CATEGORIES,
   REPAIR_SERVICE_MODES,
 } from "@/lib/constants";
@@ -36,13 +35,9 @@ import { RepairCompanyCard } from "@/components/repair/repair-company-card";
 /**
  * Inverter repair directory + request form (public client app).
  *
- * The repair company directory is public: guests browse the same vendors and
- * can fill this form. Authentication is only checked on submit — anonymous
- * visitors are sent to sign-in and returned here afterwards.
- *
- * Tapping a company opens a compact, single-view request dialog immediately —
- * the form does not sit further down the page, so there is nothing to scroll
- * to find it.
+ * Tapping a company opens a compact request dialog immediately. The form asks
+ * only for the essentials a service ticket needs — who, where, which inverter
+ * and what is wrong — so it fits in a single view with no page scrolling.
  */
 export default function ClientRepairRequestPage() {
   const router = useRouter();
@@ -55,37 +50,27 @@ export default function ClientRepairRequestPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [stateName, setStateName] = useState("");
-  const [pincode, setPincode] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [category, setCategory] = useState("");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [yearOfInstallation, setYearOfInstallation] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [problemCategory, setProblemCategory] = useState("");
   const [description, setDescription] = useState("");
-  const [errorCode, setErrorCode] = useState("");
   const [serviceMode, setServiceMode] = useState("on_site");
-  const [preferredDate, setPreferredDate] = useState("");
+  const [remarks, setRemarks] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [created, setCreated] = useState<{ ref: string; id: string; companyName: string } | null>(null);
 
   const selectedCompany = companies.find((p) => p.id === companyId);
 
-  /* Prefill the contact block from the signed-in customer. */
+  /* Prefill just the contact block from the signed-in customer. */
   const prefill = () => {
     if (!customer) return;
     setContactName((v) => v || customer.name);
     setContactPhone((v) => v || customer.phone);
-    setContactEmail((v) => v || customer.email || "");
     setCity((v) => v || customer.city);
-    setStateName((v) => v || customer.state);
-    setPincode((v) => v || customer.pincode);
   };
 
   if (created) {
@@ -125,7 +110,6 @@ export default function ClientRepairRequestPage() {
 
   const submit = () => {
     if (!customer) {
-      // Browsing and filling the form is public; only sending needs an account.
       router.push("/client/login?next=/client/repair");
       return;
     }
@@ -135,22 +119,15 @@ export default function ClientRepairRequestPage() {
       companyId,
       contactName,
       contactPhone,
-      contactEmail: contactEmail.trim() || undefined,
       address,
       city,
-      state: stateName.trim() || undefined,
-      pincode: pincode.trim() || undefined,
       brand,
       model: model.trim() || undefined,
       capacityKw: Number.isFinite(capacityNum) ? capacityNum : undefined,
-      category: category || undefined,
-      serialNumber: serialNumber.trim() || undefined,
-      yearOfInstallation: yearOfInstallation.trim() || undefined,
       problemCategory,
       description,
-      errorCode: errorCode.trim() || undefined,
+      errorCode: remarks.trim() || undefined,
       serviceMode,
-      preferredDate: preferredDate || undefined,
       attachmentName: attachmentName || undefined,
     });
 
@@ -176,7 +153,7 @@ export default function ClientRepairRequestPage() {
   const field = (name: string) => errors[name];
   const openForm = (id: string) => {
     setCompanyId(id);
-    setErrors((e) => ({ ...e, companyId: "" }));
+    setErrors({});
     setFormOpen(true);
     if (customer && !contactName) prefill();
   };
@@ -255,12 +232,12 @@ export default function ClientRepairRequestPage() {
         </Card>
       )}
 
-      {/* Request form — opens the instant a company is tapped */}
+      {/* Compact ticket-style request form — opens the instant a company is tapped */}
       <Modal
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        title={`Request repair · ${selectedCompany?.name ?? "company"}`}
-        description="Tell us the fault — the company gets this instantly."
+        title="Create repair request"
+        description={`${selectedCompany?.name ?? "Repair company"} · tell us the fault below.`}
         size="lg"
         footer={
           <>
@@ -271,7 +248,7 @@ export default function ClientRepairRequestPage() {
                 setCompanyId("");
               }}
             >
-              Change company
+              Cancel
             </Button>
             <Button onClick={submit}>
               Submit request <ArrowRight className="h-4 w-4" aria-hidden />
@@ -280,32 +257,31 @@ export default function ClientRepairRequestPage() {
         }
       >
         <div className="space-y-3">
-          {/* Selected company strip */}
+          {/* Selected company */}
           {selectedCompany && (
-            <div className="flex items-center gap-3 rounded-xl border border-brand-100 bg-brand-50/70 p-2.5">
-              <div className="relative h-11 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-white">
+            <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-alt/60 p-2">
+              <div className="relative h-8 w-10 shrink-0 overflow-hidden rounded border border-line bg-white">
                 {(selectedCompany.image ?? selectedCompany.logoUrl) ? (
                   <Image
                     src={selectedCompany.image ?? selectedCompany.logoUrl ?? ""}
                     alt={`${selectedCompany.name} logo`}
                     fill
-                    sizes="56px"
-                    className="object-contain p-1"
+                    sizes="40px"
+                    className="object-contain p-0.5"
                     unoptimized={(selectedCompany.image ?? selectedCompany.logoUrl ?? "").startsWith("data:")}
                   />
                 ) : (
-                  <Wrench className="absolute inset-0 m-auto h-5 w-5 text-ink-faint" aria-hidden />
+                  <Wrench className="absolute inset-0 m-auto h-4 w-4 text-ink-faint" aria-hidden />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-ink">{selectedCompany.name}</p>
-                <p className="flex items-center gap-2 text-[11px] text-ink-muted">
+                <p className="truncate text-[12px] font-semibold text-ink">{selectedCompany.name}</p>
+                <p className="flex items-center gap-2 text-[10.5px] text-ink-muted">
                   <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-3 w-3" aria-hidden />
-                    {selectedCompany.city}, {selectedCompany.state}
+                    <MapPin className="h-2.5 w-2.5" aria-hidden /> {selectedCompany.city}, {selectedCompany.state}
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-warning-400 text-warning-400" aria-hidden />
+                    <Star className="h-2.5 w-2.5 fill-warning-400 text-warning-400" aria-hidden />
                     {selectedCompany.rating.toFixed(1)}
                   </span>
                 </p>
@@ -316,20 +292,18 @@ export default function ClientRepairRequestPage() {
                   setFormOpen(false);
                   setCompanyId("");
                 }}
-                className="shrink-0 text-[11.5px] font-medium text-brand-700 hover:underline"
+                className="shrink-0 text-[11px] font-medium text-brand-700 hover:underline"
               >
                 Change
               </button>
             </div>
           )}
-          {field("companyId") && (
-            <p className="text-xs text-danger-600">{field("companyId")}</p>
-          )}
+          {field("companyId") && <p className="text-xs text-danger-600">{field("companyId")}</p>}
 
-          {/* Contact & address */}
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-              Contact & visit address
+          {/* Customer information */}
+          <fieldset>
+            <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              Customer information
               {customer && (
                 <button
                   type="button"
@@ -343,102 +317,48 @@ export default function ClientRepairRequestPage() {
             <div className="grid grid-cols-2 gap-2">
               <Input
                 id="repair-contact-name"
-                label="Contact person"
+                label="Complaint raised by"
                 required
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
-                placeholder="Full name"
+                placeholder="Customer name"
                 error={field("contactName")}
               />
               <Input
                 id="repair-contact-phone"
-                label="Contact number"
+                label="Mobile number"
                 required
                 type="tel"
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="+91 98870 51001"
+                placeholder="Customer mobile number"
                 error={field("contactPhone")}
-              />
-              <Input
-                id="repair-contact-email"
-                label="Email (optional)"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="you@example.com"
-                error={field("contactEmail")}
-              />
-              <Input
-                id="repair-city"
-                label="City"
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Jaipur"
-                error={field("city")}
-              />
-              <div className="col-span-2">
-                <Input
-                  id="repair-address"
-                  label="Address"
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street, area, landmark"
-                  error={field("address")}
-                />
-              </div>
-              <Input
-                id="repair-state"
-                label="State"
-                value={stateName}
-                onChange={(e) => setStateName(e.target.value)}
-                placeholder="Rajasthan"
-              />
-              <Input
-                id="repair-pincode"
-                label="Pincode"
-                value={pincode}
-                onChange={(e) => setPincode(e.target.value)}
-                placeholder="302013"
               />
             </div>
           </fieldset>
 
-          {/* Inverter */}
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+          {/* Inverter details */}
+          <fieldset>
+            <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
               Inverter details
             </legend>
             <div className="grid grid-cols-2 gap-2">
               <Select
                 id="repair-brand"
-                label="Brand"
+                label="Brand name"
                 required
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                placeholder="Select a brand…"
+                placeholder="Select brand"
                 options={INVERTER_BRANDS.map((b) => ({ value: b, label: b }))}
                 error={field("brand")}
               />
-              <Select
-                id="repair-category"
-                label="Inverter type"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Not sure"
-                options={Object.entries(PRODUCT_CATEGORY_LABELS).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-              />
               <Input
                 id="repair-model"
-                label="Model number"
+                label="Model"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. VTX-3P-110K"
+                placeholder="e.g. PVS50KWTL"
               />
               <Input
                 id="repair-capacity"
@@ -447,45 +367,51 @@ export default function ClientRepairRequestPage() {
                 min={0}
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
-                placeholder="e.g. 110"
+                placeholder="Select capacity"
                 error={field("capacityKw")}
               />
               <Input
-                id="repair-serial"
-                label="Serial number"
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                placeholder="Optional"
+                id="repair-city"
+                label="City"
+                required
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="City"
+                error={field("city")}
               />
-              <Input
-                id="repair-year"
-                label="Installed year"
-                value={yearOfInstallation}
-                onChange={(e) => setYearOfInstallation(e.target.value)}
-                placeholder="Optional"
-              />
+              <div className="col-span-2">
+                <Input
+                  id="repair-address"
+                  label="Inverter location"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Pickup/installation location (full address)"
+                  error={field("address")}
+                />
+              </div>
             </div>
           </fieldset>
 
-          {/* Problem */}
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-              What is wrong?
+          {/* Fault details */}
+          <fieldset>
+            <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              Fault details
             </legend>
             <div className="grid grid-cols-2 gap-2">
               <Select
                 id="repair-problem-category"
-                label="Problem category"
+                label="Fault type"
                 required
                 value={problemCategory}
                 onChange={(e) => setProblemCategory(e.target.value)}
-                placeholder="Select a category…"
+                placeholder="Select fault type"
                 options={REPAIR_PROBLEM_CATEGORIES.map((c) => ({ value: c, label: c }))}
                 error={field("problemCategory")}
               />
               <Select
                 id="repair-service-mode"
-                label="Service mode"
+                label="Service type"
                 value={serviceMode}
                 onChange={(e) => setServiceMode(e.target.value)}
                 options={REPAIR_SERVICE_MODES.map((m) => ({ value: m.value, label: m.label }))}
@@ -493,58 +419,42 @@ export default function ClientRepairRequestPage() {
               <div className="col-span-2">
                 <Textarea
                   id="repair-description"
-                  label="Describe the problem"
+                  label="Fault description"
                   required
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Trips on over-voltage every afternoon and stops generating…"
+                  placeholder="Describe the issue…"
                   error={field("description")}
                 />
               </div>
-              <Input
-                id="repair-error-code"
-                label="Error code"
-                value={errorCode}
-                onChange={(e) => setErrorCode(e.target.value)}
-                placeholder="Optional · e.g. F-23"
-              />
-              <Input
-                id="repair-preferred-date"
-                label="Preferred date"
-                type="date"
-                value={preferredDate}
-                onChange={(e) => setPreferredDate(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink-soft transition-colors hover:border-brand-400 hover:bg-brand-50/40">
-                <Paperclip className="h-3.5 w-3.5" aria-hidden />
-                {attachmentName || "Attach a photo (optional)"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) setAttachmentName(file.name);
-                    e.target.value = "";
-                  }}
+              <div className="col-span-2">
+                <Input
+                  id="repair-remarks"
+                  label="Remarks (optional)"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Any remarks for this ticket…"
                 />
-              </label>
-              {attachmentName && (
-                <button
-                  type="button"
-                  onClick={() => setAttachmentName("")}
-                  className="text-[11.5px] text-ink-faint hover:text-danger-600"
-                >
-                  Remove
-                </button>
-              )}
+              </div>
             </div>
+            <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-medium text-ink-muted transition-colors hover:text-brand-700">
+              <Paperclip className="h-3.5 w-3.5" aria-hidden />
+              {attachmentName || "Attach a photo (optional)"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setAttachmentName(file.name);
+                  e.target.value = "";
+                }}
+              />
+            </label>
           </fieldset>
 
-          <p className="flex items-start gap-2 border-t border-line pt-2.5 text-[11px] leading-4 text-ink-faint">
+          <p className="flex items-start gap-2 border-t border-line pt-2 text-[10.5px] leading-4 text-ink-faint">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             Shared only with the company you picked. Warranty decisions stay with the manufacturer.
           </p>
