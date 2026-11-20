@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { googleSignIn } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,33 @@ const FEATURES = [
 ];
 
 type Mode = "signin" | "signup";
+
+/** Public OAuth client ID — a missing value disables the Google option. */
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
+/** Minimal shape of the Google Identity Services globals we use. */
+type GoogleIdentity = {
+  accounts: {
+    id: {
+      initialize: (config: {
+        client_id: string;
+        callback: (response: { credential?: string }) => void;
+        cancel_callback?: () => void;
+      }) => void;
+      renderButton: (
+        container: HTMLElement,
+        config: { theme: string; size: string; text: string; shape: string; width: number },
+      ) => void;
+    };
+  };
+};
+
+/** Return visitors to the internal page they came from. */
+function afterAuthPath() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next) return "/client";
+  return next.startsWith("/client") || next.startsWith("/marketplace") ? next : "/client";
+}
 
 /**
  * Client (customer) sign-in & sign-up — end customers only.
@@ -67,12 +95,6 @@ export default function ClientLoginPage() {
     setError("");
   };
 
-  /** Return visitors to the page they came from (only internal client paths). */
-  const afterAuthPath = () => {
-    const next = new URLSearchParams(window.location.search).get("next");
-    return next?.startsWith("/client") ? next : "/client";
-  };
-
   const signIn = (id: string, displayName: string) => {
     portalLogin(id);
     toast(`Welcome, ${displayName.split(" ")[0]}`, {
@@ -80,6 +102,112 @@ export default function ClientLoginPage() {
     });
     router.push(afterAuthPath());
   };
+
+  /* ---- Google Sign-In ---- */
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const gsiInitializedRef = useRef(false);
+  const [googleScriptFailed, setGoogleScriptFailed] = useState(false);
+
+  const completeGoogleSignIn = useCallback(
+    async (idToken: string) => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await googleSignIn(idToken);
+        const email = result.profile.email.toLowerCase();
+        const existing = state.customers.find(
+          (c) => (c.email ?? "").toLowerCase() === email,
+        );
+        if (existing) {
+          portalLogin(existing.id);
+          toast(`Welcome, ${existing.name.split(" ")[0]}`, {
+            description: "Signed in with Google.",
+          });
+          router.push(afterAuthPath());
+          return;
+        }
+        // New Google account — reuse the existing demo registration path.
+        // Google does not provide a phone or city, so they stay empty.
+        const created = registerCustomer({
+          name: result.profile.name,
+          email,
+          phone: "",
+          city: "",
+        });
+        toast(`Welcome, ${created.name.split(" ")[0]}`, {
+          description: "Account created with Google.",
+        });
+        router.push(afterAuthPath());
+      } catch (err) {
+        setLoading(false);
+        setError(
+          err instanceof Error ? err.message : "Google Sign-In failed. Please try again.",
+        );
+      }
+    },
+    [state.customers, portalLogin, registerCustomer, toast, router],
+  );
+
+  useEffect(() => {
+    if (mode !== "signin" || !GOOGLE_CLIENT_ID) return;
+    let active = true;
+
+    const setup = () => {
+      const g = (window as Window & { google?: GoogleIdentity }).google;
+      if (!active || !g || !googleButtonRef.current) return false;
+      try {
+        g.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response) => {
+            if (!response.credential) {
+              setLoading(false);
+              setError("Google sign-in was cancelled. Please try again.");
+              return;
+            }
+            void completeGoogleSignIn(response.credential);
+          },
+          cancel_callback: () => {
+            setLoading(false);
+            setError("Google sign-in was cancelled. Please try again.");
+          },
+        });
+        g.accounts.id.renderButton(googleButtonRef.current, {
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "rectangular",
+          width: 300,
+        });
+        return true;
+      } catch {
+        setGoogleScriptFailed(true);
+        return false;
+      }
+    };
+
+    const init = () => {
+      if (gsiInitializedRef.current) return;
+      if (setup()) gsiInitializedRef.current = true;
+    };
+    const w = window as Window & { google?: GoogleIdentity };
+    if (w.google) {
+      init();
+      return () => {
+        active = false;
+      };
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = init;
+    script.onerror = () => setGoogleScriptFailed(true);
+    document.body.appendChild(script);
+
+    return () => {
+      active = false;
+    };
+  }, [mode, completeGoogleSignIn]);
 
   const submitSignIn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +281,7 @@ export default function ClientLoginPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto max-w-5xl space-y-3.5 sm:space-y-5">
       {/* ---------------- Hero + auth card ---------------- */}
       <section className="relative overflow-hidden rounded-3xl bg-ink shadow-pop">
         {/* glows + grid */}
@@ -175,26 +303,26 @@ export default function ClientLoginPage() {
           />
         </div>
 
-        <div className="relative grid gap-8 p-5 sm:p-8 lg:grid-cols-[1fr_380px] lg:items-center lg:gap-10 lg:p-12">
+        <div className="relative grid gap-4 p-4 sm:gap-8 sm:p-8 lg:grid-cols-[1fr_380px] lg:items-center lg:gap-10 lg:p-12">
           {/* Copy */}
           <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-medium text-white/90 ring-1 ring-white/20 backdrop-blur">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/90 ring-1 ring-white/20 backdrop-blur sm:px-3 sm:py-1.5 sm:text-[12px]">
               <UserRound className="h-3.5 w-3.5 text-brand-300" aria-hidden />
               RAYVIQ customer app
             </span>
 
-            <h1 className="mt-4 text-balance text-2xl font-semibold leading-[1.15] tracking-tight text-white sm:text-3xl lg:text-4xl">
-              Book &amp; track solar inverter repairs,{" "}
+            <h1 className="mt-2.5 text-balance text-xl font-semibold leading-[1.15] tracking-tight text-white sm:mt-4 sm:text-3xl lg:text-4xl">
+              Book &amp; track equipment repairs,{" "}
               <span className="bg-gradient-to-r from-brand-200 via-white to-brand-300 bg-clip-text text-transparent">
                 without the runaround
               </span>
             </h1>
-            <p className="mt-3 max-w-lg text-pretty text-[14px] leading-6 text-white/70 sm:text-[15px] sm:leading-7">
+            <p className="mt-3 hidden max-w-lg text-pretty text-[14px] leading-6 text-white/70 sm:block sm:text-[15px] sm:leading-7">
               Create your account or sign in to raise a service request, follow a
               verified engineer to your site, and keep every report in one place.
             </p>
 
-            <ul className="mt-5 grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <ul className="mt-5 hidden grid-cols-1 gap-2.5 sm:grid sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
               {FEATURES.map((f) => (
                 <li
                   key={f.title}
@@ -211,7 +339,7 @@ export default function ClientLoginPage() {
           </div>
 
           {/* Auth card */}
-          <div className="rounded-2xl bg-surface p-5 shadow-2xl shadow-black/40 ring-1 ring-black/5 sm:p-6">
+          <div className="rounded-2xl bg-surface p-4 shadow-2xl shadow-black/40 ring-1 ring-black/5 backdrop-blur-sm sm:p-6">
             {/* Mode toggle */}
             <div
               className="grid grid-cols-2 gap-1 rounded-xl bg-surface-alt p-1 ring-1 ring-line"
@@ -224,7 +352,7 @@ export default function ClientLoginPage() {
                 aria-selected={mode === "signin"}
                 onClick={() => switchMode("signin")}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors",
+                  "flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors sm:py-2 sm:text-[13px]",
                   mode === "signin"
                     ? "bg-surface text-ink shadow-card"
                     : "text-ink-muted hover:text-ink",
@@ -238,7 +366,7 @@ export default function ClientLoginPage() {
                 aria-selected={mode === "signup"}
                 onClick={() => switchMode("signup")}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors",
+                  "flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors sm:py-2 sm:text-[13px]",
                   mode === "signup"
                     ? "bg-surface text-ink shadow-card"
                     : "text-ink-muted hover:text-ink",
@@ -250,14 +378,14 @@ export default function ClientLoginPage() {
 
             {mode === "signin" ? (
               <>
-                <h2 className="mt-4 text-lg font-semibold tracking-tight text-ink">
+                <h2 className="mt-3 text-lg font-semibold tracking-tight text-ink sm:mt-4">
                   Welcome back
                 </h2>
                 <p className="mt-1 text-[13px] text-ink-muted">
                   Sign in with your registered mobile number or email.
                 </p>
 
-                <form onSubmit={submitSignIn} className="mt-4 space-y-3.5">
+                <form onSubmit={submitSignIn} className="mt-3 space-y-3 sm:mt-4 sm:space-y-3.5">
                   <div>
                     <Label htmlFor="client-id" required>
                       Mobile number or email
@@ -276,7 +404,7 @@ export default function ClientLoginPage() {
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="+91 98870 51001"
                         className={cn(
-                          "h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100",
+                          "h-10 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-11",
                           error &&
                             "border-danger-500 focus:border-danger-500 focus:ring-danger-100",
                         )}
@@ -290,7 +418,29 @@ export default function ClientLoginPage() {
                   </Button>
                 </form>
 
-                <div className="mt-4 flex items-center justify-between border-t border-line pt-3.5 text-[12px]">
+                {GOOGLE_CLIENT_ID ? (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-3">
+                      <span className="h-px flex-1 bg-line" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                        or
+                      </span>
+                      <span className="h-px flex-1 bg-line" />
+                    </div>
+                    <div ref={googleButtonRef} className="mt-2.5 flex justify-center sm:mt-3" />
+                    {googleScriptFailed && (
+                      <p className="mt-2 text-center text-xs text-danger-600">
+                        Google Sign-In could not load. Check your connection and try again.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-center text-[11px] text-ink-faint">
+                    Google Sign-In is not configured.
+                  </p>
+                )}
+
+                <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-[11.5px] sm:mt-4 sm:pt-3.5 sm:text-[12px]">
                   <Link
                     href="/forgot-password"
                     className="inline-flex items-center gap-1.5 font-medium text-brand-600 hover:text-brand-700"
@@ -302,14 +452,14 @@ export default function ClientLoginPage() {
               </>
             ) : (
               <>
-                <h2 className="mt-4 text-lg font-semibold tracking-tight text-ink">
+                <h2 className="mt-3 text-lg font-semibold tracking-tight text-ink sm:mt-4">
                   Create your account
                 </h2>
                 <p className="mt-1 text-[13px] text-ink-muted">
                   Free to join — book and track repairs in seconds.
                 </p>
 
-                <form onSubmit={submitSignUp} className="mt-4 space-y-3">
+                <form onSubmit={submitSignUp} className="mt-3 space-y-3 sm:mt-4">
                   <div>
                     <Label htmlFor="su-name" required>
                       Full name
@@ -327,7 +477,7 @@ export default function ClientLoginPage() {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Your name"
-                        className="h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                        className="h-10 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-11"
                       />
                     </div>
                   </div>
@@ -350,7 +500,7 @@ export default function ClientLoginPage() {
                         value={signupPhone}
                         onChange={(e) => setSignupPhone(e.target.value)}
                         placeholder="+91 98870 51001"
-                        className="h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                        className="h-10 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-11"
                       />
                     </div>
                   </div>
@@ -385,7 +535,7 @@ export default function ClientLoginPage() {
                           value={city}
                           onChange={(e) => setCity(e.target.value)}
                           placeholder="Jaipur"
-                          className="h-11 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                          className="h-10 w-full rounded-lg border border-line-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint transition-shadow focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-11"
                         />
                       </div>
                     </div>
@@ -410,7 +560,7 @@ export default function ClientLoginPage() {
 
       {/* ---------------- Demo identities (sign-in only) ---------------- */}
       {mode === "signin" && (
-        <section className="rounded-2xl border border-accent-300/50 bg-accent-100/40 p-4 sm:p-5">
+        <section className="rounded-2xl border border-accent-300/50 bg-accent-100/40 p-3.5 sm:p-5">
           <p className="flex items-center gap-1.5 text-[13px] font-semibold text-accent-600">
             <Sparkles className="h-3.5 w-3.5" aria-hidden /> One-tap demo customers
           </p>
@@ -418,13 +568,13 @@ export default function ClientLoginPage() {
             Tap an account to sign in instantly — no OTP is sent in the demo.
           </p>
 
-          <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+          <div className="mt-2.5 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-1.5 sm:overflow-visible sm:pb-0">
             {state.customers.slice(0, 6).map((c, i) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => signIn(c.id, c.name)}
-                className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50"
+                className="flex min-w-[210px] shrink-0 items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50 sm:min-w-0 sm:shrink sm:py-2.5"
               >
                 <span
                   className={cn(
