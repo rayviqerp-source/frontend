@@ -1,5 +1,6 @@
 import type {
   NotificationChannel,
+  RepairProductType,
   RepairRequestStatus,
   Role,
   TicketPriority,
@@ -252,6 +253,58 @@ export const REPAIR_SERVICE_MODE_LABELS: Record<string, string> = {
   workshop: "Pick-up & workshop repair",
   remote: "Remote diagnosis (no visit)",
 };
+
+/* ------------------------------------------------------------------ */
+/* Repair product families (inverter / battery / other)                */
+/* ------------------------------------------------------------------ */
+
+export const REPAIR_PRODUCT_TYPES: ReadonlyArray<{
+  value: RepairProductType;
+  label: string;
+}> = [
+  { value: "inverter", label: "Inverter" },
+  { value: "battery", label: "Battery" },
+  { value: "other", label: "Other equipment" },
+];
+
+export const REPAIR_PRODUCT_TYPE_LABELS: Record<string, string> = {
+  inverter: "Inverter",
+  battery: "Battery",
+  other: "Other equipment",
+};
+
+/** Battery brands — inverters keep using `INVERTER_BRANDS`. */
+export const BATTERY_BRANDS: ReadonlyArray<string> = [
+  "Voltrix",
+  "Helios",
+  "Sarcon",
+  "Generic Li-ion",
+  "Lead-acid",
+  "Other",
+];
+
+export const BATTERY_PROBLEM_CATEGORIES: ReadonlyArray<string> = [
+  "Not holding charge",
+  "Overheating",
+  "Swelling / physical damage",
+  "BMS / controller fault",
+  "Deep discharge",
+  "Slow charging",
+  "Capacity drop",
+  "Water ingress",
+  "Other",
+];
+
+export const REPAIR_PROBLEM_CATEGORY_LABEL = "Fault type";
+
+/** Capacity label, hint and display unit for each equipment family. */
+export function repairCapacityMeta(productType?: string) {
+  if (productType === "battery")
+    return { label: "Capacity (Ah / kWh)", placeholder: "e.g. 100", unit: "" };
+  if (productType === "other")
+    return { label: "Size / capacity", placeholder: "e.g. 5 kVA", unit: "" };
+  return { label: "Capacity (kW)", placeholder: "e.g. 110", unit: "kW" };
+}
 
 /** Inverter families a repair vendor can service. */
 export const REPAIR_SPECIALITIES = [

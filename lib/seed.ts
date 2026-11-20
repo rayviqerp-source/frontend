@@ -1528,6 +1528,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "302013",
     },
     inverter: {
+      productType: "inverter",
       brand: "Voltrix",
       model: "VTX-3P-110K",
       capacityKw: 110,
@@ -1605,6 +1606,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "380015",
     },
     inverter: {
+      productType: "inverter",
       brand: "Helios",
       model: "HLS-STR-25K",
       capacityKw: 25,
@@ -1650,6 +1652,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "305004",
     },
     inverter: {
+      productType: "inverter",
       brand: "Voltrix",
       model: "VTX-CEN-160K",
       capacityKw: 160,
@@ -1737,6 +1740,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "313007",
     },
     inverter: {
+      productType: "inverter",
       brand: "SunArc",
       capacityKw: 50,
       category: "hybrid_inverter",
@@ -1792,6 +1796,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "301001",
     },
     inverter: {
+      productType: "inverter",
       brand: "Voltrix",
       model: "VTX-3P-45K",
       capacityKw: 45,
@@ -1837,6 +1842,7 @@ export const seedRepairRequests: RepairRequest[] = [
       pincode: "324005",
     },
     inverter: {
+      productType: "inverter",
       brand: "Helios",
       model: "HLS-CEN-100K",
       capacityKw: 100,

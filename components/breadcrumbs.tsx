@@ -33,7 +33,7 @@ const LABELS: Record<string, string> = {
   assistant: "AI Assistant",
   search: "Global Search",
   portal: "Customer Portal",
-  repair: "Inverter Repair",
+  repair: "Repair Service",
   repairs: "Repair Requests",
   "repair-requests": "Repair Requests",
   contracts: "Contracts",

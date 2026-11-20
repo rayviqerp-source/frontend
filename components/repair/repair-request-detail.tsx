@@ -18,7 +18,11 @@ import {
   UserRound,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { REPAIR_SERVICE_MODE_LABELS } from "@/lib/constants";
+import {
+  REPAIR_PRODUCT_TYPE_LABELS,
+  REPAIR_SERVICE_MODE_LABELS,
+  repairCapacityMeta,
+} from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -232,7 +236,7 @@ export function RepairRequestDetail({
         </Card>
       )}
 
-      {/* -------- Customer + inverter -------- */}
+      {/* -------- Customer + equipment -------- */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Customer" />
@@ -246,6 +250,11 @@ export function RepairRequestDetail({
                 <span className="text-ink-muted">· {customer.company}</span>
               )}
             </div>
+            {request.contact.company && request.contact.company !== customer?.company && (
+              <div className="truncate pl-5 text-[12px] text-ink-muted">
+                {request.contact.company}
+              </div>
+            )}
             <div className="flex items-center gap-2 text-ink-soft">
               <Phone className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
               {request.contact.phone}
@@ -265,12 +274,19 @@ export function RepairRequestDetail({
         </Card>
 
         <Card>
-          <CardHeader title="Inverter" />
+          <CardHeader
+            title={REPAIR_PRODUCT_TYPE_LABELS[request.inverter.productType ?? "inverter"] ?? "Inverter"}
+          />
           <dl className="space-y-1.5 text-[13px]">
             {[
               ["Brand", request.inverter.brand],
               ["Model", request.inverter.model ?? "—"],
-              ["Capacity", request.inverter.capacityKw ? `${request.inverter.capacityKw} kW` : "—"],
+              [
+                repairCapacityMeta(request.inverter.productType).label.replace(/\s*\(.*\)/, ""),
+                request.inverter.capacityKw
+                  ? `${request.inverter.capacityKw} ${repairCapacityMeta(request.inverter.productType).unit}`.trim()
+                  : "—",
+              ],
               ["Serial no.", request.inverter.serialNumber ?? "—"],
               ["Installed", request.inverter.yearOfInstallation ?? "—"],
               [

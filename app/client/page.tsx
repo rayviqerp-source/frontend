@@ -110,13 +110,13 @@ export default function ClientHomePage() {
         <ArrowRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />
       </Link>
 
-      {/* Inverter repair service */}
+      {/* Repair service */}
       <Link
         href="/client/repair"
         className="group flex items-center justify-between gap-3 rounded-2xl border border-accent-300/50 bg-accent-100/40 p-4 transition-colors hover:border-accent-400 hover:bg-accent-100/70"
       >
         <span className="min-w-0">
-          <span className="block text-[15px] font-semibold text-ink">Inverter repair service</span>
+          <span className="block text-[15px] font-semibold text-ink">Repair service</span>
           <span className="mt-0.5 block text-[12px] text-ink-muted">
             Send a repair request to a verified company and track it live
           </span>
@@ -174,7 +174,7 @@ export default function ClientHomePage() {
         <Card padded={false}>
           <div className="px-4 pt-4 sm:px-5 sm:pt-5">
             <CardHeader
-              title="Inverter repairs"
+              title="Repair requests"
               description="Repair jobs you have sent to a service company."
               action={
                 <Link href="/client/repairs" className="text-[13px] font-medium text-brand-700 hover:text-brand-800">

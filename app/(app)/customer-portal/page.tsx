@@ -44,7 +44,7 @@ export default function CustomerPortalPage() {
               </Link>
               <Link href="/client/repair">
                 <Button variant="outline">
-                  <Wrench className="h-4 w-4" /> Inverter repair
+                  <Wrench className="h-4 w-4" /> Repair service
                 </Button>
               </Link>
               <Button variant="outline" onClick={() => { portalLogout(); toast("Portal session ended", { tone: "info" }); }}>

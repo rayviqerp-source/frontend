@@ -34,6 +34,7 @@ import type {
   MaintenanceVisit,
   Oem,
   PlatformSettings,
+  RepairProductType,
   RepairRequest,
   RepairRequestStatus,
   Role,
@@ -69,7 +70,11 @@ import {
   seedUsers,
   seedVisits,
 } from "./seed";
-import { REPAIR_REQUEST_TRANSITIONS, TICKET_TRANSITIONS } from "./constants";
+import {
+  REPAIR_PRODUCT_TYPE_LABELS,
+  REPAIR_REQUEST_TRANSITIONS,
+  TICKET_TRANSITIONS,
+} from "./constants";
 import {
   REPAIR_ADMIN_ROLES,
   canRepairTransition,
@@ -329,8 +334,12 @@ export interface NewRepairRequestInput {
   customerId: string;
   /** Service partner (repair company) the request is sent to. */
   companyId: string;
+  /** Equipment family — defaults to `inverter` when omitted. */
+  productType?: RepairProductType;
   contactName: string;
   contactPhone: string;
+  /** Optional company the customer is raising the complaint for. */
+  contactCompany?: string;
   contactEmail?: string;
   address: string;
   city: string;
@@ -391,13 +400,13 @@ export function validateRepairRequest(
     errors.contactEmail = "Enter a valid email address.";
   }
   if (!input.brand.trim()) {
-    errors.brand = "Select the inverter brand.";
+    errors.brand = "Select the brand.";
   }
   if (input.capacityKw !== undefined && (input.capacityKw <= 0 || input.capacityKw > 1000)) {
-    errors.capacityKw = "Capacity must be between 1 and 1000 kW.";
+    errors.capacityKw = "Capacity must be between 1 and 1000.";
   }
   if (!input.problemCategory.trim()) {
-    errors.problemCategory = "Select the problem category.";
+    errors.problemCategory = "Select the fault type.";
   }
   if (input.description.trim().length < REPAIR_MIN_DESCRIPTION) {
     errors.description = `Describe the problem in at least ${REPAIR_MIN_DESCRIPTION} characters.`;
@@ -1289,6 +1298,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           contact: {
             name: input.contactName.trim(),
             phone: input.contactPhone.trim(),
+            company: input.contactCompany?.trim() || undefined,
             email: input.contactEmail?.trim() || undefined,
             address: input.address.trim(),
             city: input.city.trim(),
@@ -1296,6 +1306,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             pincode: input.pincode?.trim() || customer?.pincode || "",
           },
           inverter: {
+            productType: input.productType ?? "inverter",
             brand: input.brand.trim(),
             model: input.model?.trim() || undefined,
             capacityKw: input.capacityKw,
@@ -1327,7 +1338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               actorRole: "customer",
               type: "created",
               title: "Repair request raised",
-              detail: `${input.brand.trim()} inverter — ${input.problemCategory.trim()}`,
+              detail: `${REPAIR_PRODUCT_TYPE_LABELS[input.productType ?? "inverter"] ?? "Equipment"} · ${input.brand.trim()} — ${input.problemCategory.trim()}`,
               toStatus: "pending",
             },
           ],
@@ -1335,17 +1346,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
         d.repairRequests.unshift(request);
         holder.request = request;
+        const productLabel =
+          REPAIR_PRODUCT_TYPE_LABELS[request.inverter.productType ?? "inverter"] ?? "Equipment";
         audit(
           d,
           "Repair request created",
           request.ref,
-          `${company.name} · ${request.inverter.brand} · ${request.problem.category}`,
+          `${company.name} · ${productLabel} · ${request.inverter.brand} · ${request.problem.category}`,
           "info",
           request.id,
         );
         notify(d, {
-          title: "New inverter repair request",
-          body: `${request.ref} — ${request.problem.category} for ${request.inverter.brand} ${request.inverter.model ?? ""} in ${request.contact.city}.`,
+          title: "New repair request",
+          body: `${request.ref} — ${request.problem.category} for ${productLabel} ${request.inverter.brand} ${request.inverter.model ?? ""} in ${request.contact.city}.`,
           type: "repair_request_created",
           audience: ["partner_manager", "super_admin", "ops_manager"],
           ticketRef: request.ref,

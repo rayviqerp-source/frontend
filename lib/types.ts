@@ -408,6 +408,9 @@ export type RepairRequestStatus =
   | "in_progress"
   | "completed";
 
+/** Equipment family a repair request is about. */
+export type RepairProductType = "inverter" | "battery" | "other";
+
 export interface RepairTimelineEvent {
   id: string;
   at: string;
@@ -431,6 +434,8 @@ export interface RepairAttachment {
 }
 
 export interface RepairInverterDetails {
+  /** Equipment family — defaults to `inverter` for older saved requests. */
+  productType?: RepairProductType;
   brand: string;
   model?: string;
   capacityKw?: number;
@@ -454,6 +459,8 @@ export interface RepairRequest {
   contact: {
     name: string;
     phone: string;
+    /** Optional company the complaint was raised on behalf of. */
+    company?: string;
     email?: string;
     address: string;
     city: string;

@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { usePartnerScope } from "@/components/vendor/scope";
-import { REPAIR_SERVICE_MODE_LABELS } from "@/lib/constants";
+import {
+  REPAIR_PRODUCT_TYPE_LABELS,
+  REPAIR_SERVICE_MODE_LABELS,
+  repairCapacityMeta,
+} from "@/lib/constants";
 import { repairRequestKpis, repairRequestsForCompany } from "@/lib/selectors";
 import { Badge } from "@/components/ui/badge";
 import { Card, PageHeader, StatCard } from "@/components/ui/card";
@@ -96,8 +100,8 @@ export default function VendorRepairRequestsPage() {
   return (
     <div>
       <PageHeader
-        title="Inverter repair requests"
-        description={`Customer repair jobs addressed to ${partner.name} — accept, decline and keep the customer informed.`}
+        title="Repair requests"
+        description={`Customer repair jobs addressed to ${partner.name} — inverters, batteries and other equipment. Accept, decline and keep the customer informed.`}
         breadcrumbs={<Breadcrumbs />}
         actions={
           <Badge tone={counts.pending ? "amber" : "green"} dot>
@@ -173,7 +177,7 @@ export default function VendorRepairRequestsPage() {
                         ? "Nothing completed yet"
                         : "No declined requests"
               }
-              description={`Customers pick ${partner.name} from the repair directory when they need an inverter fixed — new requests land here instantly.`}
+              description={`Customers pick ${partner.name} from the repair directory when they need equipment fixed — new requests land here instantly.`}
             />
           </div>
         ) : (
@@ -182,7 +186,7 @@ export default function VendorRepairRequestsPage() {
               columns={[
                 { label: "Request" },
                 { label: "Customer" },
-                { label: "Inverter" },
+                { label: "Equipment" },
                 { label: "Problem" },
                 { label: "Service" },
                 { label: "Received" },
@@ -207,10 +211,15 @@ export default function VendorRepairRequestsPage() {
                       <p className="text-[11px] text-ink-faint">{r.contact.phone}</p>
                     </Td>
                     <Td>
-                      <p className="text-[12.5px] text-ink-soft">{r.inverter.brand}</p>
+                      <p className="text-[12.5px] text-ink-soft">
+                        {REPAIR_PRODUCT_TYPE_LABELS[r.inverter.productType ?? "inverter"] ?? "Equipment"}
+                      </p>
                       <p className="text-[11px] text-ink-faint">
-                        {r.inverter.model ?? "—"}
-                        {r.inverter.capacityKw ? ` · ${r.inverter.capacityKw} kW` : ""}
+                        {r.inverter.brand}
+                        {r.inverter.model ? ` · ${r.inverter.model}` : ""}
+                        {r.inverter.capacityKw
+                          ? ` · ${r.inverter.capacityKw} ${repairCapacityMeta(r.inverter.productType).unit}`.trim()
+                          : ""}
                       </p>
                     </Td>
                     <Td className="max-w-56">

@@ -13,7 +13,12 @@ import {
   Wrench,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { REPAIR_SERVICE_MODE_LABELS, REPAIR_STATUS_LABELS } from "@/lib/constants";
+import {
+  REPAIR_PRODUCT_TYPE_LABELS,
+  REPAIR_SERVICE_MODE_LABELS,
+  REPAIR_STATUS_LABELS,
+  repairCapacityMeta,
+} from "@/lib/constants";
 import { can } from "@/lib/permissions";
 import { repairRequestKpis } from "@/lib/selectors";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +32,7 @@ import { RepairStatusBadge } from "@/components/repair/repair-status-badge";
 import { downloadCsv, relativeTime } from "@/lib/utils";
 
 /**
- * Platform oversight for inverter repair requests.
+ * Platform oversight for repair requests (inverters, batteries and other equipment).
  *
  * Admins see every request across all repair companies, can filter the
  * pipeline and manage which companies are listed in the repair directory.
@@ -52,6 +57,9 @@ export default function AdminRepairRequestsPage() {
         return (
           r.ref.toLowerCase().includes(q) ||
           r.problem.category.toLowerCase().includes(q) ||
+          (REPAIR_PRODUCT_TYPE_LABELS[r.inverter.productType ?? "inverter"] ?? "")
+            .toLowerCase()
+            .includes(q) ||
           r.inverter.brand.toLowerCase().includes(q) ||
           r.contact.city.toLowerCase().includes(q) ||
           (customer?.name ?? "").toLowerCase().includes(q)
@@ -71,6 +79,7 @@ export default function AdminRepairRequestsPage() {
         company: state.partners.find((p) => p.id === r.companyId)?.name ?? r.companyId,
         customer: state.customers.find((c) => c.id === r.customerId)?.name ?? "",
         city: r.contact.city,
+        productType: r.inverter.productType ?? "inverter",
         brand: r.inverter.brand,
         model: r.inverter.model ?? "",
         problem: r.problem.category,
@@ -84,8 +93,8 @@ export default function AdminRepairRequestsPage() {
   return (
     <div>
       <PageHeader
-        title="Inverter repair requests"
-        description="Platform-wide oversight of every inverter repair request — pipeline health, repair company coverage and directory management."
+        title="Repair requests"
+        description="Platform-wide oversight of every repair request — inverters, batteries and other equipment, pipeline health and company coverage."
         breadcrumbs={<Breadcrumbs />}
         actions={
           <Button variant="outline" onClick={exportRows}>
@@ -202,7 +211,7 @@ export default function AdminRepairRequestsPage() {
                     { label: "Request" },
                     { label: "Company" },
                     { label: "Customer" },
-                    { label: "Inverter" },
+                    { label: "Equipment" },
                     { label: "Problem" },
                     { label: "Updated" },
                     { label: "Status" },
@@ -231,10 +240,15 @@ export default function AdminRepairRequestsPage() {
                           <p className="text-[11px] text-ink-faint">{r.contact.phone}</p>
                         </Td>
                         <Td>
-                          <p className="text-[12px] text-ink-soft">{r.inverter.brand}</p>
+                          <p className="text-[12px] text-ink-soft">
+                            {REPAIR_PRODUCT_TYPE_LABELS[r.inverter.productType ?? "inverter"] ?? "Equipment"}
+                          </p>
                           <p className="text-[11px] text-ink-faint">
-                            {r.inverter.model ?? "—"}
-                            {r.inverter.capacityKw ? ` · ${r.inverter.capacityKw} kW` : ""}
+                            {r.inverter.brand}
+                            {r.inverter.model ? ` · ${r.inverter.model}` : ""}
+                            {r.inverter.capacityKw
+                              ? ` · ${r.inverter.capacityKw} ${repairCapacityMeta(r.inverter.productType).unit}`.trim()
+                              : ""}
                           </p>
                         </Td>
                         <Td className="max-w-52">

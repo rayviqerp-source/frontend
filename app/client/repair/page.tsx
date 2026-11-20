@@ -19,11 +19,16 @@ import {
 import { useStore } from "@/lib/store";
 import { useActiveCustomer } from "@/lib/session";
 import {
+  BATTERY_BRANDS,
+  BATTERY_PROBLEM_CATEGORIES,
   INVERTER_BRANDS,
+  REPAIR_PRODUCT_TYPES,
   REPAIR_PROBLEM_CATEGORIES,
   REPAIR_SERVICE_MODES,
+  repairCapacityMeta,
 } from "@/lib/constants";
 import { activeRepairCompanies } from "@/lib/selectors";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -47,8 +52,10 @@ export default function ClientRepairRequestPage() {
   const companies = useMemo(() => activeRepairCompanies(state), [state]);
 
   const [companyId, setCompanyId] = useState("");
+  const [productType, setProductType] = useState<"inverter" | "battery" | "other">("inverter");
   const [formOpen, setFormOpen] = useState(false);
   const [contactName, setContactName] = useState("");
+  const [contactCompany, setContactCompany] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -64,11 +71,25 @@ export default function ClientRepairRequestPage() {
   const [created, setCreated] = useState<{ ref: string; id: string; companyName: string } | null>(null);
 
   const selectedCompany = companies.find((p) => p.id === companyId);
+  const brandOptions =
+    productType === "battery"
+      ? BATTERY_BRANDS
+      : productType === "other"
+        ? ["Generic", "Other"]
+        : INVERTER_BRANDS;
+  const faultOptions =
+    productType === "battery"
+      ? BATTERY_PROBLEM_CATEGORIES
+      : productType === "other"
+        ? ["Not working", "Physical damage", "Other"]
+        : REPAIR_PROBLEM_CATEGORIES;
+  const capMeta = repairCapacityMeta(productType);
 
   /* Prefill just the contact block from the signed-in customer. */
   const prefill = () => {
     if (!customer) return;
     setContactName((v) => v || customer.name);
+    setContactCompany((v) => v || customer.company || "");
     setContactPhone((v) => v || customer.phone);
     setCity((v) => v || customer.city);
   };
@@ -117,8 +138,10 @@ export default function ClientRepairRequestPage() {
     const result = createRepairRequest({
       customerId: customer.id,
       companyId,
+      productType,
       contactName,
       contactPhone,
+      contactCompany: contactCompany.trim() || undefined,
       address,
       city,
       brand,
@@ -158,6 +181,13 @@ export default function ClientRepairRequestPage() {
     if (customer && !contactName) prefill();
   };
 
+  const pickProduct = (value: "inverter" | "battery" | "other") => {
+    setProductType(value);
+    setBrand("");
+    setProblemCategory("");
+    setErrors({});
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -178,7 +208,7 @@ export default function ClientRepairRequestPage() {
             </Link>
           )}
           <Badge tone="blue" className="ring-brand-100">
-            Inverter Repair
+            Repair Service
           </Badge>
         </div>
       </div>
@@ -190,13 +220,13 @@ export default function ClientRepairRequestPage() {
         <div className="relative z-10">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white ring-1 ring-white/20">
             <Wrench className="h-3 w-3 text-accent-400" aria-hidden />
-            Inverter Repair Service
+            Repair Service
           </span>
           <h1 className="mt-2.5 text-xl font-bold tracking-tight sm:text-2xl">
-            Get your inverter repaired
+            Get your equipment repaired
           </h1>
           <p className="mt-1 text-[13px] leading-5 text-white/75">
-            Pick a verified repair company — the request form opens right away.
+            Inverter, battery or other equipment — pick a verified repair company and the form opens right away.
           </p>
         </div>
       </section>
@@ -215,7 +245,7 @@ export default function ClientRepairRequestPage() {
             title="Choose a repair company"
             description={`${companies.length} verified RAYVIQ repair vendors — tap one to open its request form.`}
           />
-          <div className="grid grid-cols-2 gap-3 sm:gap-5">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-5">
             {companies.map((p) => (
               <RepairCompanyCard
                 key={p.id}
@@ -300,6 +330,31 @@ export default function ClientRepairRequestPage() {
           )}
           {field("companyId") && <p className="text-xs text-danger-600">{field("companyId")}</p>}
 
+          {/* Equipment family */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              Equipment
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {REPAIR_PRODUCT_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => pickProduct(t.value)}
+                  aria-pressed={productType === t.value}
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-[11.5px] font-medium transition-colors",
+                    productType === t.value
+                      ? "border-brand-400 bg-brand-50 text-brand-700"
+                      : "border-line bg-surface text-ink-muted hover:border-brand-300",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Customer information */}
           <fieldset>
             <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
@@ -316,6 +371,13 @@ export default function ClientRepairRequestPage() {
             </legend>
             <div className="grid grid-cols-2 gap-2">
               <Input
+                id="repair-contact-company"
+                label="Company name (optional)"
+                value={contactCompany}
+                onChange={(e) => setContactCompany(e.target.value)}
+                placeholder="Company name"
+              />
+              <Input
                 id="repair-contact-name"
                 label="Complaint raised by"
                 required
@@ -324,6 +386,8 @@ export default function ClientRepairRequestPage() {
                 placeholder="Customer name"
                 error={field("contactName")}
               />
+            </div>
+            <div className="mt-2">
               <Input
                 id="repair-contact-phone"
                 label="Mobile number"
@@ -350,7 +414,7 @@ export default function ClientRepairRequestPage() {
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
                 placeholder="Select brand"
-                options={INVERTER_BRANDS.map((b) => ({ value: b, label: b }))}
+                options={brandOptions.map((b) => ({ value: b, label: b }))}
                 error={field("brand")}
               />
               <Input
@@ -358,16 +422,16 @@ export default function ClientRepairRequestPage() {
                 label="Model"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. PVS50KWTL"
+                placeholder={productType === "battery" ? "e.g. LFP-100-48V" : "e.g. PVS50KWTL"}
               />
               <Input
                 id="repair-capacity"
-                label="Capacity (kW)"
+                label={capMeta.label}
                 type="number"
                 min={0}
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
-                placeholder="Select capacity"
+                placeholder={capMeta.placeholder}
                 error={field("capacityKw")}
               />
               <Input
@@ -406,7 +470,7 @@ export default function ClientRepairRequestPage() {
                 value={problemCategory}
                 onChange={(e) => setProblemCategory(e.target.value)}
                 placeholder="Select fault type"
-                options={REPAIR_PROBLEM_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                options={faultOptions.map((c) => ({ value: c, label: c }))}
                 error={field("problemCategory")}
               />
               <Select

@@ -20,7 +20,7 @@ import { RepairStatusBadge } from "@/components/repair/repair-status-badge";
 import { cn, relativeTime } from "@/lib/utils";
 
 /**
- * Customer repair-request list — every inverter repair request raised by the
+ * Customer repair-request list — every repair request raised by the
  * signed-in customer, newest first, with its live status.
  */
 export default function ClientRepairRequestsPage() {
@@ -94,7 +94,7 @@ export default function ClientRepairRequestsPage() {
           </span>
           <h2 className="mt-3 text-[15px] font-semibold text-ink">No repair requests yet</h2>
           <p className="mx-auto mt-1 max-w-xs text-[13px] leading-6 text-ink-muted">
-            Request an inverter repair from a verified company and track the progress here.
+            Request a repair from a verified company — inverter, battery or other equipment — and track progress here.
           </p>
           <div className="mt-4 flex justify-center">
             <Link href="/client/repair">
